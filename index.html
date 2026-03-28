@@ -730,7 +730,13 @@ async function fetchGameStats(gameId) {
 
   try {
     const res = await fetch(`/api/stats/${gameId}`);
-    const data = await res.json();
+    let data;
+    try {
+      data = await res.json();
+    } catch (e) {
+      // Server returned non-JSON (Cloudflare block, HTML error page, etc.)
+      throw new Error('Could not fetch stats from game — upload a CSV file instead');
+    }
 
     if (data.error === 'upload_required') {
       // Plus API not available — prompt file upload

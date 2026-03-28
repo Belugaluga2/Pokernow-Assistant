@@ -63,8 +63,10 @@ _PLAYER_RE = r'"(.+?)\s+@\s+(.+?)"'
 _START_RE = re.compile(
     r'-- starting hand #(\d+)'
     r'(?:\s*\(id:\s*(\w+)\))?'
-    r'\s*\(([^)]+)\)'              # game type
-    r'\s*\(dealer:\s*' + _PLAYER_RE + r'\)'
+    r'\s+(.+?)\s+'                 # game type (not in parens)
+    r'(?:\(dealer:\s*' + _PLAYER_RE + r'\)'
+    r'|'
+    r'\(dead button\))'            # or dead button
     r'\s*--'
 )
 _END_RE = re.compile(r'-- ending hand #(\d+)')
@@ -155,8 +157,8 @@ def _build_hand(header_match, lines):
     hand_number = header_match.group(1)
     hand_id = header_match.group(2) or ''
     game_type_str = header_match.group(3)
-    dealer_name = header_match.group(4)
-    dealer_id = header_match.group(5)
+    dealer_name = header_match.group(4) if header_match.lastindex >= 4 else None
+    dealer_id = header_match.group(5) if header_match.lastindex >= 5 else None
 
     # Determine game type
     game_type = 'th'  # default Texas Hold'em
