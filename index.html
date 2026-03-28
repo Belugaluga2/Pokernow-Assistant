@@ -35,7 +35,6 @@
     font-size: 0.9rem;
   }
 
-  /* Input Section */
   .input-section {
     display: flex;
     gap: 0.75rem;
@@ -73,7 +72,6 @@
   .btn:hover { background: #15803d; }
   .btn:disabled { background: #334155; cursor: not-allowed; }
 
-  /* Status */
   .status {
     text-align: center;
     padding: 2rem;
@@ -97,7 +95,6 @@
 
   .error { color: #ef4444; }
 
-  /* Tabs */
   .tabs {
     display: flex;
     gap: 0;
@@ -124,7 +121,6 @@
   .tab-content { display: none; }
   .tab-content.active { display: block; }
 
-  /* Results */
   .results { display: none; }
   .results.visible { display: block; }
 
@@ -143,11 +139,7 @@
     color: #cbd5e1;
   }
 
-  /* Tables */
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
+  table { width: 100%; border-collapse: collapse; }
 
   th {
     text-align: left;
@@ -173,7 +165,6 @@
   .negative { color: #ef4444; }
   .neutral { color: #94a3b8; }
 
-  /* Settlements */
   .settlement {
     display: flex;
     align-items: center;
@@ -184,63 +175,38 @@
   }
 
   .settlement:last-child { border-bottom: none; }
-
   .settlement .from { color: #ef4444; font-weight: 600; min-width: 100px; text-align: right; }
   .settlement .arrow { color: #475569; }
-  .settlement .amount {
-    color: #facc15;
-    font-weight: 700;
-    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
-  }
+  .settlement .amount { color: #facc15; font-weight: 700; font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace; }
   .settlement .to { color: #22c55e; font-weight: 600; }
 
-  /* Game Info */
-  .game-info {
-    display: flex;
-    gap: 1.5rem;
-    flex-wrap: wrap;
-    margin-bottom: 0.5rem;
-  }
+  .game-info { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+  .game-info .stat { display: flex; flex-direction: column; }
+  .game-info .stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; }
+  .game-info .stat-value { font-size: 1.15rem; font-weight: 700; color: #e2e8f0; }
 
-  .game-info .stat {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .game-info .stat-label {
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #64748b;
-  }
-
-  .game-info .stat-value {
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: #e2e8f0;
-  }
-
-  /* VPIP bar */
-  .vpip-bar-container {
-    width: 100%;
-    height: 6px;
-    background: #0f1117;
-    border-radius: 3px;
-    overflow: hidden;
-  }
-
-  .vpip-bar {
-    height: 100%;
-    border-radius: 3px;
-    transition: width 0.5s ease;
-  }
-
+  .vpip-bar-container { width: 100%; height: 6px; background: #0f1117; border-radius: 3px; overflow: hidden; }
+  .vpip-bar { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
   .vpip-tight { background: #3b82f6; }
   .vpip-normal { background: #22c55e; }
   .vpip-loose { background: #f59e0b; }
   .vpip-very-loose { background: #ef4444; }
 
-  /* Responsive */
+  .loading-inline {
+    color: #64748b;
+    font-style: italic;
+    padding: 1.5rem;
+    text-align: center;
+  }
+
+  .loading-inline .spinner {
+    width: 20px; height: 20px;
+    border-width: 2px;
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 0.5rem;
+  }
+
   @media (max-width: 600px) {
     .input-section { flex-direction: column; }
     .container { padding: 1rem; }
@@ -278,14 +244,12 @@
       <div class="card">
         <h2>Player Results</h2>
         <table>
-          <thead>
-            <tr>
-              <th>Player</th>
-              <th class="num">Buy-in</th>
-              <th class="num">Cash-out</th>
-              <th class="num">Net</th>
-            </tr>
-          </thead>
+          <thead><tr>
+            <th>Player</th>
+            <th class="num">Buy-in</th>
+            <th class="num">Cash-out</th>
+            <th class="num">Net</th>
+          </tr></thead>
           <tbody id="ledgerBody"></tbody>
         </table>
       </div>
@@ -298,31 +262,22 @@
     <div class="tab-content" id="tab-stats">
       <div class="card">
         <h2>Player Statistics</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Player</th>
-              <th class="num">Hands</th>
-              <th class="num">VPIP</th>
-              <th class="num">PFR</th>
-              <th style="width: 20%">VPIP Range</th>
-            </tr>
-          </thead>
-          <tbody id="statsBody"></tbody>
-        </table>
+        <div id="statsContent">
+          <div style="text-align:center; padding: 1.5rem; color: #94a3b8;">
+            <p style="margin-bottom: 1rem;">Upload a PokerNow CSV log file to compute VPIP, PFR, and other stats instantly.</p>
+            <p style="margin-bottom: 1rem; font-size: 0.8rem; color: #64748b;">Download the log from the game page (Full Log tab > Download button)</p>
+            <label class="btn" style="display:inline-block; cursor:pointer;">
+              Upload CSV Log
+              <input type="file" accept=".csv" id="csvUpload" onchange="uploadCSV(this)" style="display:none" />
+            </label>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </div>
 
 <script>
-// ===== CORS HANDLING =====
-const CORS_PROXIES = [
-  url => url,
-  url => `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-];
-
 function extractGameId(input) {
   input = input.trim();
   const m = input.match(/pokernow\.com\/games\/([a-zA-Z0-9_-]+)/);
@@ -331,270 +286,24 @@ function extractGameId(input) {
   return null;
 }
 
-async function fetchJSON(url) {
-  for (const proxyFn of CORS_PROXIES) {
-    try {
-      const res = await fetch(proxyFn(url));
-      if (!res.ok) continue;
-      const text = await res.text();
-      return JSON.parse(text);
-    } catch (e) {
-      continue;
-    }
-  }
-  throw new Error('Could not fetch game data. The game may be private, or CORS is blocking the request.');
-}
-
-// ===== DATA FETCHING =====
-async function fetchAllLogs(gameId, onProgress) {
-  const allLogs = [];
-  let beforeAt = null;
-  let page = 0;
-
-  while (true) {
-    const url = `https://www.pokernow.com/games/${gameId}/log` +
-                (beforeAt ? `?before_at=${beforeAt}` : '');
-    const data = await fetchJSON(url);
-
-    if (!data.logs || data.logs.length === 0) break;
-
-    allLogs.push(...data.logs);
-    beforeAt = data.logs[data.logs.length - 1].created_at;
-    page++;
-    if (onProgress) onProgress(allLogs.length, page);
-
-    await new Promise(r => setTimeout(r, 80));
-  }
-
-  allLogs.reverse();
-  return allLogs;
-}
-
-// ===== LOG PARSING =====
-function parseLogs(logs) {
-  const players = {};
-  const hands = [];
-  let currentHand = null;
-
-  function getPlayer(name, id) {
-    if (!players[id]) {
-      players[id] = {
-        name, id,
-        buyins: [],
-        cashouts: [],
-        lastStack: 0,
-        isActive: false,
-      };
-    }
-    players[id].name = name;
-    return players[id];
-  }
-
-  for (const log of logs) {
-    const msg = log.msg;
-
-    // Player joined
-    let m = msg.match(/The player "(.+?) @ (.+?)" (?:joined|re-joined) the game with a stack of ([\d.]+)/);
-    if (m) {
-      const p = getPlayer(m[1], m[2]);
-      p.buyins.push(parseFloat(m[3]));
-      p.isActive = true;
-      continue;
-    }
-
-    // Player quits
-    m = msg.match(/The player "(.+?) @ (.+?)" quits the game with a stack of ([\d.]+)/);
-    if (m) {
-      const p = getPlayer(m[1], m[2]);
-      p.cashouts.push(parseFloat(m[3]));
-      p.isActive = false;
-      continue;
-    }
-
-    // Admin stack update (rebuy/top-up)
-    m = msg.match(/The admin updated the player "(.+?) @ (.+?)" stack from ([\d.]+) to ([\d.]+)/);
-    if (m) {
-      const p = getPlayer(m[1], m[2]);
-      const diff = parseFloat(m[4]) - parseFloat(m[3]);
-      if (diff > 0) p.buyins.push(diff);
-      if (diff < 0) p.cashouts.push(Math.abs(diff));
-      continue;
-    }
-
-    // Hand start
-    m = msg.match(/-- starting hand #(\d+)/);
-    if (m) {
-      currentHand = {
-        number: parseInt(m[1]),
-        players: [],
-        blindPlayers: new Set(),
-        vpipPlayers: new Set(),
-        pfrPlayers: new Set(),
-        isPreflop: true,
-      };
-      hands.push(currentHand);
-      continue;
-    }
-
-    // Hand end
-    if (/-- ending hand #\d+/.test(msg)) {
-      currentHand = null;
-      continue;
-    }
-
-    if (!currentHand) continue;
-
-    // Player stacks at hand start
-    if (/^Player stacks:/.test(msg)) {
-      const re = /"(.+?) @ (.+?)" \(([\d.]+)\)/g;
-      let pm;
-      while ((pm = re.exec(msg)) !== null) {
-        const p = getPlayer(pm[1], pm[2]);
-        p.lastStack = parseFloat(pm[3]);
-        p.isActive = true;
-        currentHand.players.push(pm[2]);
-      }
-      continue;
-    }
-
-    // Blind posts (small, big, missed, straddle)
-    m = msg.match(/"(.+?) @ (.+?)" posts a .+blind of ([\d.]+)/);
-    if (m && currentHand.isPreflop) {
-      currentHand.blindPlayers.add(m[2]);
-      continue;
-    }
-
-    // Flop ends preflop
-    if (/^Flop:/.test(msg) || /^Flop \(/.test(msg)) {
-      currentHand.isPreflop = false;
-      continue;
-    }
-
-    // Preflop actions only
-    if (!currentHand.isPreflop) continue;
-
-    // Raises (including all-in raises)
-    m = msg.match(/"(.+?) @ (.+?)" raises to ([\d.]+)/);
-    if (m) {
-      currentHand.vpipPlayers.add(m[2]);
-      currentHand.pfrPlayers.add(m[2]);
-      continue;
-    }
-
-    // Calls (including all-in calls)
-    m = msg.match(/"(.+?) @ (.+?)" calls ([\d.]+)/);
-    if (m) {
-      currentHand.vpipPlayers.add(m[2]);
-      continue;
-    }
-
-    // Bets (rare preflop, but possible in some variants)
-    m = msg.match(/"(.+?) @ (.+?)" bets ([\d.]+)/);
-    if (m) {
-      currentHand.vpipPlayers.add(m[2]);
-      currentHand.pfrPlayers.add(m[2]);
-      continue;
-    }
-  }
-
-  return { players, hands };
-}
-
-// ===== LEDGER CALCULATION =====
-function calculateLedger(players) {
-  const results = [];
-
-  for (const id in players) {
-    const p = players[id];
-    const totalBuyin = p.buyins.reduce((a, b) => a + b, 0);
-    const totalCashout = p.cashouts.reduce((a, b) => a + b, 0) +
-                         (p.isActive ? p.lastStack : 0);
-    const net = round2(totalCashout - totalBuyin);
-
-    if (totalBuyin === 0 && totalCashout === 0) continue;
-
-    results.push({
-      name: p.name,
-      id: p.id,
-      buyin: round2(totalBuyin),
-      cashout: round2(totalCashout),
-      net,
-    });
-  }
-
-  results.sort((a, b) => b.net - a.net);
-  return results;
-}
-
-function calculateSettlements(ledger) {
-  const debtors = ledger.filter(p => p.net < -0.005).map(p => ({ ...p, remaining: Math.abs(p.net) }));
-  const creditors = ledger.filter(p => p.net > 0.005).map(p => ({ ...p, remaining: p.net }));
-
-  debtors.sort((a, b) => b.remaining - a.remaining);
-  creditors.sort((a, b) => b.remaining - a.remaining);
-
-  const settlements = [];
-  let i = 0, j = 0;
-
-  while (i < debtors.length && j < creditors.length) {
-    const amount = Math.min(debtors[i].remaining, creditors[j].remaining);
-    if (amount > 0.005) {
-      settlements.push({
-        from: debtors[i].name,
-        to: creditors[j].name,
-        amount: round2(amount),
-      });
-    }
-    debtors[i].remaining -= amount;
-    creditors[j].remaining -= amount;
-    if (debtors[i].remaining < 0.01) i++;
-    if (creditors[j].remaining < 0.01) j++;
-  }
-
-  return settlements;
-}
-
-// ===== STATS CALCULATION =====
-function calculateStats(players, hands) {
-  const stats = {};
-
-  for (const id in players) {
-    stats[id] = { name: players[id].name, handsPlayed: 0, vpipHands: 0, pfrHands: 0 };
-  }
-
-  for (const hand of hands) {
-    for (const id of hand.players) {
-      if (!stats[id]) continue;
-      stats[id].handsPlayed++;
-      if (hand.vpipPlayers.has(id)) stats[id].vpipHands++;
-      if (hand.pfrPlayers.has(id)) stats[id].pfrHands++;
-    }
-  }
-
-  return Object.values(stats)
-    .filter(s => s.handsPlayed > 0)
-    .map(s => ({
-      name: s.name,
-      handsPlayed: s.handsPlayed,
-      vpip: round1(s.vpipHands / s.handsPlayed * 100),
-      pfr: round1(s.pfrHands / s.handsPlayed * 100),
-      vpipHands: s.vpipHands,
-      pfrHands: s.pfrHands,
-    }))
-    .sort((a, b) => b.handsPlayed - a.handsPlayed);
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
 }
 
 // ===== RENDERING =====
-function renderResults(ledger, settlements, stats, handCount) {
-  const totalPot = ledger.reduce((s, p) => s + p.buyin, 0);
+function renderLedger(data) {
+  const { players, settlements } = data;
+  const totalPot = players.reduce((s, p) => s + p.buyin, 0);
+
   document.getElementById('gameInfo').innerHTML = `
-    <div class="stat"><span class="stat-label">Players</span><span class="stat-value">${ledger.length}</span></div>
-    <div class="stat"><span class="stat-label">Hands</span><span class="stat-value">${handCount}</span></div>
-    <div class="stat"><span class="stat-label">Total Buy-ins</span><span class="stat-value">$${round2(totalPot).toFixed(2)}</span></div>
+    <div class="stat"><span class="stat-label">Players</span><span class="stat-value">${players.length}</span></div>
+    <div class="stat"><span class="stat-label">Total Buy-ins</span><span class="stat-value">$${totalPot.toFixed(2)}</span></div>
     <div class="stat"><span class="stat-label">Settlements</span><span class="stat-value">${settlements.length}</span></div>
   `;
 
-  document.getElementById('ledgerBody').innerHTML = ledger.map(p => `
+  document.getElementById('ledgerBody').innerHTML = players.map(p => `
     <tr>
       <td>${esc(p.name)}</td>
       <td class="num">$${p.buyin.toFixed(2)}</td>
@@ -618,31 +327,96 @@ function renderResults(ledger, settlements, stats, handCount) {
       </div>
     `).join('');
   }
+}
 
-  document.getElementById('statsBody').innerHTML = stats.map(s => {
-    const barClass = s.vpip < 20 ? 'vpip-tight' : s.vpip < 30 ? 'vpip-normal' : s.vpip < 45 ? 'vpip-loose' : 'vpip-very-loose';
-    return `
-      <tr>
+let _lastStatsData = null;
+
+function renderStats(data) {
+  _lastStatsData = data;
+  renderStatsView('standard');
+}
+
+function renderStatsView(mode) {
+  const data = _lastStatsData;
+  if (!data) return;
+  const { stats, totalHands, totalBombPots } = data;
+  const isBP = mode === 'bombpot';
+
+  // Update game info with hand count if available
+  const info = document.getElementById('gameInfo');
+  if (info && !document.getElementById('handsStatDiv')) {
+    const handsDiv = document.createElement('div');
+    handsDiv.className = 'stat';
+    handsDiv.id = 'handsStatDiv';
+    handsDiv.innerHTML = `<span class="stat-label">Hands</span><span class="stat-value">${totalHands}</span>`;
+    const firstStat = info.children[0];
+    if (firstStat) firstStat.after(handsDiv);
+  }
+
+  // Toggle buttons
+  let html = `<div style="display:flex; gap:0; margin-bottom:1rem; border-bottom:2px solid #1e293b;">
+    <button class="tab ${!isBP ? 'active' : ''}" onclick="renderStatsView('standard')">Standard</button>
+    <button class="tab ${isBP ? 'active' : ''}" onclick="renderStatsView('bombpot')">Bomb Pot</button>
+  </div>`;
+
+  if (isBP) {
+    html += `<p style="color:#64748b; font-size:0.8rem; margin-bottom:1rem;">Bomb Pot VPIP: % of bomb pot hands where player voluntarily put in money beyond the forced ante (bets, calls, or raises on flop/turn/river).</p>`;
+    html += `<table><thead><tr>
+      <th>Player</th>
+      <th class="num">BP Hands</th>
+      <th class="num">BP VPIP</th>
+      <th style="width: 20%">VPIP Range</th>
+    </tr></thead><tbody>`;
+
+    html += stats.filter(s => s.bpHandsPlayed > 0).map(s => {
+      const barClass = s.bpVpip < 20 ? 'vpip-tight' : s.bpVpip < 30 ? 'vpip-normal' : s.bpVpip < 45 ? 'vpip-loose' : 'vpip-very-loose';
+      return `<tr>
+        <td>${esc(s.name)}</td>
+        <td class="num">${s.bpHandsPlayed}</td>
+        <td class="num">${s.bpVpip.toFixed(1)}%</td>
+        <td><div class="vpip-bar-container"><div class="vpip-bar ${barClass}" style="width: ${Math.min(s.bpVpip, 100)}%"></div></div></td>
+      </tr>`;
+    }).join('');
+
+    if (totalBombPots === 0) html += '<tr><td colspan="4" style="text-align:center;color:#64748b;padding:1rem;">No bomb pot hands found</td></tr>';
+  } else {
+    html += `<table><thead><tr>
+      <th>Player</th>
+      <th class="num">Hands</th>
+      <th class="num">VPIP</th>
+      <th class="num">PFR</th>
+      <th style="width: 20%">VPIP Range</th>
+    </tr></thead><tbody>`;
+
+    html += stats.filter(s => s.handsPlayed > 0).map(s => {
+      const barClass = s.vpip < 20 ? 'vpip-tight' : s.vpip < 30 ? 'vpip-normal' : s.vpip < 45 ? 'vpip-loose' : 'vpip-very-loose';
+      return `<tr>
         <td>${esc(s.name)}</td>
         <td class="num">${s.handsPlayed}</td>
         <td class="num">${s.vpip.toFixed(1)}%</td>
         <td class="num">${s.pfr.toFixed(1)}%</td>
-        <td>
-          <div class="vpip-bar-container">
-            <div class="vpip-bar ${barClass}" style="width: ${Math.min(s.vpip, 100)}%"></div>
-          </div>
-        </td>
-      </tr>
-    `;
-  }).join('');
+        <td><div class="vpip-bar-container"><div class="vpip-bar ${barClass}" style="width: ${Math.min(s.vpip, 100)}%"></div></div></td>
+      </tr>`;
+    }).join('');
+
+    if (totalHands === 0) html += '<tr><td colspan="5" style="text-align:center;color:#64748b;padding:1rem;">No standard hands found</td></tr>';
+  }
+
+  html += '</tbody></table>';
+  document.getElementById('statsContent').innerHTML = html;
+}
+
+function renderStatsError(err) {
+  document.getElementById('statsContent').innerHTML =
+    `<p class="error">Failed to load stats: ${esc(err)}</p>`;
 }
 
 // ===== UI =====
 function showStatus(text, isError) {
   const el = document.getElementById('status');
-  const textEl = document.getElementById('statusText');
   el.classList.add('visible');
   el.querySelector('.spinner').style.display = isError ? 'none' : 'block';
+  const textEl = document.getElementById('statusText');
   textEl.className = isError ? 'error' : '';
   textEl.textContent = text;
 }
@@ -670,30 +444,20 @@ async function analyze() {
   const btn = document.getElementById('analyzeBtn');
   btn.disabled = true;
   document.getElementById('results').classList.remove('visible');
-  showStatus('Fetching game data...');
+  showStatus('Fetching ledger...');
 
   try {
-    const logs = await fetchAllLogs(gameId, (count, pages) => {
-      showStatus(`Fetching game data... ${count} entries (page ${pages})`);
-    });
-
-    if (logs.length === 0) {
-      showStatus('No game data found. The game may be empty or the link may be incorrect.', true);
-      btn.disabled = false;
-      return;
+    // Phase 1: Fast ledger (money messages only, ~3 pages)
+    const ledgerRes = await fetch(`/api/ledger/${gameId}`);
+    if (!ledgerRes.ok) {
+      const err = await ledgerRes.json().catch(() => ({}));
+      throw new Error(err.error || `Server returned ${ledgerRes.status}`);
     }
-
-    showStatus(`Parsing ${logs.length} log entries...`);
-
-    const { players, hands } = parseLogs(logs);
-    const ledger = calculateLedger(players);
-    const settlements = calculateSettlements(ledger);
-    const stats = calculateStats(players, hands);
-
-    renderResults(ledger, settlements, stats, hands.length);
-
+    const ledger = await ledgerRes.json();
+    renderLedger(ledger);
     hideStatus();
     document.getElementById('results').classList.add('visible');
+
   } catch (err) {
     showStatus(err.message, true);
   }
@@ -701,18 +465,42 @@ async function analyze() {
   btn.disabled = false;
 }
 
+async function uploadCSV(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const content = document.getElementById('statsContent');
+  content.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Processing CSV...</div>';
+
+  try {
+    const text = await file.text();
+    const res = await fetch('/api/stats/csv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/csv' },
+      body: text,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Server returned ${res.status}`);
+    }
+    const stats = await res.json();
+    renderStats(stats);
+    // Make sure results and stats tab are visible
+    document.getElementById('results').classList.add('visible');
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelector('[onclick*="stats"]').classList.add('active');
+    document.getElementById('tab-stats').classList.add('active');
+  } catch (err) {
+    renderStatsError(err.message);
+  }
+
+  input.value = ''; // allow re-uploading same file
+}
+
 document.getElementById('gameUrl').addEventListener('keydown', e => {
   if (e.key === 'Enter') analyze();
 });
-
-// ===== UTILS =====
-function round2(n) { return Math.round(n * 100) / 100; }
-function round1(n) { return Math.round(n * 10) / 10; }
-function esc(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
 </script>
 </body>
 </html>
