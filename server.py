@@ -27,28 +27,52 @@ DELAY = 0.5
 
 
 def curl_fetch(url, retries=3):
-    """Fetch a URL via curl with retry/backoff for rate limits."""
+    """Fetch a URL with retry/backoff for rate limits.
+    Tries curl first (bypasses Cloudflare TLS fingerprinting), falls back to requests."""
     for attempt in range(retries):
-        result = subprocess.run(
-            [CURL, '-s', '-w', '\n%{http_code}', '--max-time', '15', url],
-            capture_output=True, timeout=20,
-        )
-        output = result.stdout.decode('utf-8', errors='replace')
-        lines = output.rsplit('\n', 1)
-        body = lines[0] if len(lines) > 1 else output
-        status = int(lines[1]) if len(lines) > 1 else 0
+        # Try curl if available
+        try:
+            result = subprocess.run(
+                [CURL, '-s', '-w', '\n%{http_code}', '--max-time', '15', url],
+                capture_output=True, timeout=20,
+            )
+            output = result.stdout.decode('utf-8', errors='replace')
+            lines = output.rsplit('\n', 1)
+            body = lines[0] if len(lines) > 1 else output
+            status = int(lines[1]) if len(lines) > 1 else 0
 
-        if status == 200:
-            return json.loads(body)
-        if status == 429 and attempt < retries - 1:
-            wait = 2 ** (attempt + 1)
-            print(f'  Rate limited (429). Waiting {wait}s...')
-            time.sleep(wait)
-            continue
-        if attempt < retries - 1:
-            time.sleep(1)
-            continue
-        raise Exception(f'HTTP {status} from PokerNow')
+            if status == 200:
+                return json.loads(body)
+            if status == 429 and attempt < retries - 1:
+                wait = 2 ** (attempt + 1)
+                print(f'  Rate limited (429). Waiting {wait}s...')
+                time.sleep(wait)
+                continue
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass  # curl not available, fall back to requests
+
+        # Fallback: use requests library
+        try:
+            resp = req_lib.get(url, timeout=15, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            })
+            if resp.status_code == 200:
+                return resp.json()
+            if resp.status_code == 429 and attempt < retries - 1:
+                wait = 2 ** (attempt + 1)
+                print(f'  Rate limited (429). Waiting {wait}s...')
+                time.sleep(wait)
+                continue
+            if attempt < retries - 1:
+                time.sleep(1)
+                continue
+            raise Exception(f'HTTP {resp.status_code} from PokerNow')
+        except req_lib.RequestException as e:
+            if attempt < retries - 1:
+                time.sleep(1)
+                continue
+            raise Exception(f'Request failed: {e}')
+
     raise Exception('All retries exhausted')
 
 
@@ -498,7 +522,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    with http.server.HTTPServer(('', PORT), Handler) as server:
+    with http.server.HTTPServer(('0.0.0.0', PORT), Handler) as server:
         print(f'PokerNow Ledger running at http://localhost:{PORT}')
         print('Press Ctrl+C to stop.\n')
         try:
