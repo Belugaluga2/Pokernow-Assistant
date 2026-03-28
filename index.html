@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PokerNow Ledger</title>
+<title>PokerNow Assistant</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -15,7 +16,7 @@
     line-height: 1.5;
   }
 
-  .container { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
 
   h1 {
     font-size: 2rem;
@@ -35,11 +36,7 @@
     font-size: 0.9rem;
   }
 
-  .input-section {
-    display: flex;
-    gap: 0.75rem;
-    margin-bottom: 2rem;
-  }
+  .input-section { display: flex; gap: 0.75rem; margin-bottom: 2rem; }
 
   .input-section input {
     flex: 1;
@@ -71,19 +68,15 @@
 
   .btn:hover { background: #15803d; }
   .btn:disabled { background: #334155; cursor: not-allowed; }
+  .btn-sm { padding: 0.5rem 1rem; font-size: 0.85rem; border-radius: 6px; }
+  .btn-outline { background: transparent; border: 1px solid #334155; color: #94a3b8; }
+  .btn-outline:hover { background: #1e293b; border-color: #475569; color: #e2e8f0; }
 
-  .status {
-    text-align: center;
-    padding: 2rem;
-    color: #94a3b8;
-    display: none;
-  }
-
+  .status { text-align: center; padding: 2rem; color: #94a3b8; display: none; }
   .status.visible { display: block; }
 
   .spinner {
-    width: 32px;
-    height: 32px;
+    width: 32px; height: 32px;
     border: 3px solid #334155;
     border-top-color: #22c55e;
     border-radius: 50%;
@@ -95,12 +88,8 @@
 
   .error { color: #ef4444; }
 
-  .tabs {
-    display: flex;
-    gap: 0;
-    margin-bottom: 1.5rem;
-    border-bottom: 2px solid #1e293b;
-  }
+  /* Main tabs */
+  .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid #1e293b; }
 
   .tab {
     padding: 0.6rem 1.5rem;
@@ -150,7 +139,13 @@
     letter-spacing: 0.05em;
     color: #64748b;
     border-bottom: 1px solid #334155;
+    cursor: pointer;
+    user-select: none;
   }
+
+  th:hover { color: #94a3b8; }
+  th.sort-asc::after { content: ' \u25B2'; font-size: 0.6rem; }
+  th.sort-desc::after { content: ' \u25BC'; font-size: 0.6rem; }
 
   td {
     padding: 0.6rem 0.75rem;
@@ -166,12 +161,8 @@
   .neutral { color: #94a3b8; }
 
   .settlement {
-    display: flex;
-    align-items: center;
-    padding: 0.6rem 0;
-    border-bottom: 1px solid #1a2332;
-    gap: 0.75rem;
-    font-size: 0.9rem;
+    display: flex; align-items: center; padding: 0.6rem 0;
+    border-bottom: 1px solid #1a2332; gap: 0.75rem; font-size: 0.9rem;
   }
 
   .settlement:last-child { border-bottom: none; }
@@ -192,36 +183,66 @@
   .vpip-loose { background: #f59e0b; }
   .vpip-very-loose { background: #ef4444; }
 
-  .loading-inline {
+  /* Sub-tabs for stats categories */
+  .sub-tabs { display: flex; gap: 0.25rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .sub-tab {
+    padding: 0.4rem 0.9rem;
+    background: #0f1117;
+    border: 1px solid #334155;
+    border-radius: 6px;
     color: #64748b;
-    font-style: italic;
-    padding: 1.5rem;
-    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
   }
+  .sub-tab:hover { color: #94a3b8; border-color: #475569; }
+  .sub-tab.active { color: #22c55e; border-color: #22c55e; background: #0f2918; }
 
-  .loading-inline .spinner {
-    width: 20px; height: 20px;
-    border-width: 2px;
-    display: inline-block;
-    vertical-align: middle;
-    margin-right: 0.5rem;
+  /* Upload area */
+  .upload-zone {
+    border: 2px dashed #334155;
+    border-radius: 10px;
+    padding: 2rem;
+    text-align: center;
+    transition: all 0.2s;
+    cursor: pointer;
   }
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: #22c55e;
+    background: rgba(34, 197, 94, 0.05);
+  }
+  .upload-zone p { color: #94a3b8; margin-bottom: 0.75rem; }
+  .upload-zone .hint { font-size: 0.8rem; color: #64748b; }
+
+  /* Stat value with sample */
+  .stat-cell { display: flex; flex-direction: column; align-items: flex-end; }
+  .stat-cell .val { font-weight: 600; }
+  .stat-cell .sample { font-size: 0.7rem; color: #475569; }
+
+  /* Chart container */
+  .chart-container { position: relative; height: 350px; margin: 1rem 0; }
+
+  /* EV section */
+  .ev-table td, .ev-table th { font-size: 0.85rem; padding: 0.4rem 0.6rem; }
 
   @media (max-width: 600px) {
     .input-section { flex-direction: column; }
     .container { padding: 1rem; }
     h1 { font-size: 1.5rem; }
     th, td { padding: 0.4rem; font-size: 0.8rem; }
+    .sub-tabs { gap: 0.15rem; }
+    .sub-tab { padding: 0.3rem 0.6rem; font-size: 0.75rem; }
   }
 </style>
 </head>
 <body>
 <div class="container">
-  <h1>PokerNow Ledger</h1>
-  <p class="subtitle">Paste a PokerNow game link to generate the ledger and player statistics</p>
+  <h1>PokerNow Assistant</h1>
+  <p class="subtitle">Ledger, advanced statistics, and winnings graphs</p>
 
   <div class="input-section">
-    <input type="text" id="gameUrl" placeholder="https://www.pokernow.com/games/..." />
+    <input type="text" id="gameUrl" placeholder="Paste PokerNow game URL — fetches ledger + stats automatically" />
     <button class="btn" id="analyzeBtn" onclick="analyze()">Analyze</button>
   </div>
 
@@ -230,69 +251,410 @@
     <div id="statusText">Fetching game data...</div>
   </div>
 
-  <div class="results" id="results">
-    <div class="tabs">
+  <div class="results visible" id="results">
+    <div class="tabs" id="mainTabs">
       <button class="tab active" onclick="switchTab('ledger', this)">Ledger</button>
       <button class="tab" onclick="switchTab('stats', this)">Statistics</button>
     </div>
 
+    <!-- ========== LEDGER TAB ========== -->
     <div class="tab-content active" id="tab-ledger">
       <div class="card">
         <h2>Game Summary</h2>
-        <div class="game-info" id="gameInfo"></div>
+        <div class="game-info" id="gameInfo">
+          <div class="stat"><span class="stat-label">Status</span><span class="stat-value" style="color:#64748b">Enter a game URL above</span></div>
+        </div>
       </div>
       <div class="card">
         <h2>Player Results</h2>
         <table>
           <thead><tr>
-            <th>Player</th>
-            <th class="num">Buy-in</th>
-            <th class="num">Cash-out</th>
-            <th class="num">Net</th>
+            <th>Player</th><th class="num">Buy-in</th><th class="num">Cash-out</th><th class="num">Net</th>
           </tr></thead>
-          <tbody id="ledgerBody"></tbody>
+          <tbody id="ledgerBody">
+            <tr><td colspan="4" style="text-align:center;color:#64748b;padding:1.5rem;">No data yet</td></tr>
+          </tbody>
         </table>
       </div>
       <div class="card">
         <h2>Settlements</h2>
-        <div id="settlements"></div>
+        <div id="settlements"><p style="color:#64748b">No data yet</p></div>
       </div>
     </div>
 
+    <!-- ========== STATISTICS TAB ========== -->
     <div class="tab-content" id="tab-stats">
-      <div class="card">
-        <h2>Player Statistics</h2>
-        <div id="statsContent">
-          <div style="text-align:center; padding: 1.5rem; color: #94a3b8;">
-            <p style="margin-bottom: 1rem;">Upload a PokerNow CSV log file to compute VPIP, PFR, and other stats instantly.</p>
-            <p style="margin-bottom: 1rem; font-size: 0.8rem; color: #64748b;">Download the log from the game page (Full Log tab > Download button)</p>
-            <label class="btn" style="display:inline-block; cursor:pointer;">
-              Upload CSV Log
-              <input type="file" accept=".csv" id="csvUpload" onchange="uploadCSV(this)" style="display:none" />
-            </label>
+      <div class="card" id="statsUploadCard">
+        <h2>Hand History</h2>
+        <div id="statsSourceInfo" style="display:none;margin-bottom:1rem;color:#94a3b8;font-size:0.85rem;"></div>
+        <input type="file" accept=".csv,.json" id="fileUpload" onchange="uploadFile(this)" style="display:none" />
+        <div class="upload-zone" id="uploadZone"
+             ondragover="event.preventDefault(); this.classList.add('dragover')"
+             ondragleave="this.classList.remove('dragover')"
+             ondrop="handleDrop(event)">
+          <p>Drag &amp; drop a CSV or JSON file, or enter a game URL above and click Analyze</p>
+          <p class="hint">Stats are fetched automatically from game URLs</p>
+        </div>
+      </div>
+
+      <div id="statsArea" style="display:none">
+        <div class="card">
+          <div class="game-info" id="statsInfo"></div>
+        </div>
+
+        <!-- Stats sub-tabs -->
+        <div class="card">
+          <div class="sub-tabs" id="statSubTabs">
+            <button class="sub-tab active" onclick="switchStatTab('preflop', this)">Preflop</button>
+            <button class="sub-tab" onclick="switchStatTab('postflop', this)">Postflop</button>
+            <button class="sub-tab" onclick="switchStatTab('showdown', this)">Showdown</button>
+            <button class="sub-tab" onclick="switchStatTab('bombpot', this)">Bomb Pot</button>
           </div>
+          <div id="statsTableArea"></div>
+        </div>
+
+        <!-- Winnings chart -->
+        <div class="card">
+          <h2>Winnings Over Time</h2>
+          <div class="chart-container">
+            <canvas id="winningsChart"></canvas>
+          </div>
+        </div>
+
+        <!-- EV analysis -->
+        <div class="card" id="evCard" style="display:none">
+          <h2>All-in EV Analysis</h2>
+          <div id="evContent"></div>
         </div>
       </div>
     </div>
+
   </div>
 </div>
 
 <script>
-function extractGameId(input) {
-  input = input.trim();
-  const m = input.match(/pokernow\.com\/games\/([a-zA-Z0-9_-]+)/);
-  if (m) return m[1];
-  if (/^[a-zA-Z0-9_-]+$/.test(input)) return input;
-  return null;
+// ===== UTILITIES =====
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function switchTab(name, btn) {
+  document.querySelectorAll('#mainTabs .tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  else document.querySelector(`[onclick*="'${name}'"]`).classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
 }
 
-function esc(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
+function showStatus(text, isError) {
+  const el = document.getElementById('status');
+  el.classList.add('visible');
+  el.querySelector('.spinner').style.display = isError ? 'none' : 'block';
+  const t = document.getElementById('statusText');
+  t.className = isError ? 'error' : '';
+  t.textContent = text;
 }
 
-// ===== RENDERING =====
+function hideStatus() { document.getElementById('status').classList.remove('visible'); }
+
+// ===== UPLOAD HANDLING =====
+document.getElementById('uploadZone').addEventListener('click', () => {
+  document.getElementById('fileUpload').click();
+});
+
+function handleDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) processFile(file);
+}
+
+function uploadFile(input) {
+  const file = input.files[0];
+  if (file) processFile(file);
+  input.value = '';
+}
+
+async function processFile(file) {
+  const uploadZone = document.getElementById('uploadZone');
+  uploadZone.innerHTML = '<div style="color:#94a3b8"><span class="spinner" style="width:20px;height:20px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:0.5rem;"></span> Processing ' + esc(file.name) + '...</div>';
+
+  try {
+    const text = await file.text();
+    const res = await fetch('/api/stats/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: text,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Server returned ${res.status}`);
+    }
+    const data = await res.json();
+    renderFullStats(data);
+    uploadZone.innerHTML = '<p style="color:#22c55e">Loaded ' + data.totalHands + ' hands from ' + esc(file.name) + '</p><p class="hint">Drop another file to re-analyze</p>';
+  } catch (err) {
+    uploadZone.innerHTML = '<p class="error">Error: ' + esc(err.message) + '</p><p class="hint">Try again</p>';
+  }
+}
+
+// ===== STATS RENDERING =====
+let _statsData = null;
+let _currentStatTab = 'preflop';
+let _sortCol = null;
+let _sortDir = 'desc';
+
+const STAT_TABS = {
+  preflop: {
+    label: 'Preflop',
+    cols: [
+      { key: 'vpip', label: 'VPIP' },
+      { key: 'pfr', label: 'PFR' },
+      { key: 'threeBet', label: '3-Bet' },
+      { key: 'fourBet', label: '4-Bet' },
+      { key: 'foldTo3Bet', label: 'F/3Bet' },
+      { key: 'foldTo4Bet', label: 'F/4Bet' },
+      { key: 'stealAttempt', label: 'Steal' },
+    ],
+  },
+  postflop: {
+    label: 'Postflop',
+    cols: [
+      { key: 'cbet', label: 'C-Bet' },
+      { key: 'cbetTurn', label: 'CBet Turn' },
+      { key: 'foldToCbet', label: 'F/CBet' },
+      { key: 'tripleBarrel', label: 'Triple' },
+      { key: 'donkBet', label: 'Donk' },
+      { key: 'foldToStealSB', label: 'F/Steal SB' },
+      { key: 'foldToStealBB', label: 'F/Steal BB' },
+    ],
+  },
+  showdown: {
+    label: 'Showdown & Aggression',
+    cols: [
+      { key: 'wtsd', label: 'WTSD%' },
+      { key: 'wsd', label: 'W$SD%' },
+      { key: 'af', label: 'AF', noSample: true },
+      { key: 'afq', label: 'AFq' },
+    ],
+  },
+  bombpot: {
+    label: 'Bomb Pot',
+    cols: [
+      { key: 'bpHandsPlayed', label: 'BP Hands', raw: true },
+      { key: 'bpVpip', label: 'BP VPIP' },
+    ],
+  },
+};
+
+function renderFullStats(data) {
+  _statsData = data;
+  _sortCol = null;
+
+  // Show stats area
+  document.getElementById('statsArea').style.display = 'block';
+
+  // Info bar
+  document.getElementById('statsInfo').innerHTML = `
+    <div class="stat"><span class="stat-label">Format</span><span class="stat-value">${data.format || '?'}</span></div>
+    <div class="stat"><span class="stat-label">Hands</span><span class="stat-value">${data.totalHands}</span></div>
+    <div class="stat"><span class="stat-label">Bomb Pots</span><span class="stat-value">${data.totalBombPots}</span></div>
+    <div class="stat"><span class="stat-label">Players</span><span class="stat-value">${data.stats.length}</span></div>
+  `;
+
+  // Render initial tab
+  switchStatTab('preflop', document.querySelector('.sub-tab.active'));
+
+  // Winnings chart
+  renderWinningsChart(data.winnings);
+
+  // EV analysis
+  renderEV(data.ev);
+}
+
+function switchStatTab(name, btn) {
+  _currentStatTab = name;
+  _sortCol = null;
+  document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderStatsTable();
+}
+
+function renderStatsTable() {
+  if (!_statsData) return;
+  const tab = STAT_TABS[_currentStatTab];
+  const stats = [..._statsData.stats];
+
+  // Sort
+  if (_sortCol) {
+    stats.sort((a, b) => {
+      const va = typeof a[_sortCol] === 'number' ? a[_sortCol] : 0;
+      const vb = typeof b[_sortCol] === 'number' ? b[_sortCol] : 0;
+      return _sortDir === 'asc' ? va - vb : vb - va;
+    });
+  }
+
+  let html = '<table><thead><tr>';
+  html += `<th onclick="sortBy('name')">Player${sortIcon('name')}</th>`;
+  html += `<th class="num" onclick="sortBy('handsPlayed')">Hands${sortIcon('handsPlayed')}</th>`;
+  for (const col of tab.cols) {
+    html += `<th class="num" onclick="sortBy('${col.key}')">${col.label}${sortIcon(col.key)}</th>`;
+  }
+  html += '</tr></thead><tbody>';
+
+  const filtered = _currentStatTab === 'bombpot'
+    ? stats.filter(s => s.bpHandsPlayed > 0)
+    : stats.filter(s => s.handsPlayed > 0);
+
+  for (const s of filtered) {
+    html += '<tr>';
+    html += `<td>${esc(s.name)}</td>`;
+    html += `<td class="num">${_currentStatTab === 'bombpot' ? s.bpHandsPlayed : s.handsPlayed}</td>`;
+    for (const col of tab.cols) {
+      const val = s[col.key];
+      const sample = s.samples && s.samples[col.key];
+      if (col.raw) {
+        html += `<td class="num">${val}</td>`;
+      } else {
+        const barClass = val < 20 ? 'vpip-tight' : val < 35 ? 'vpip-normal' : val < 50 ? 'vpip-loose' : 'vpip-very-loose';
+        html += `<td class="num"><div class="stat-cell">`;
+        html += `<span class="val">${typeof val === 'number' ? (col.noSample ? val.toFixed(2) : val.toFixed(1) + '%') : val}</span>`;
+        if (sample && !col.noSample) html += `<span class="sample">${sample}</span>`;
+        html += `</div></td>`;
+      }
+    }
+    html += '</tr>';
+  }
+
+  if (filtered.length === 0) {
+    html += `<tr><td colspan="${tab.cols.length + 2}" style="text-align:center;color:#64748b;padding:1rem;">No data</td></tr>`;
+  }
+
+  html += '</tbody></table>';
+  document.getElementById('statsTableArea').innerHTML = html;
+}
+
+function sortIcon(key) {
+  if (_sortCol !== key) return '';
+  return _sortDir === 'asc' ? ' \u25B2' : ' \u25BC';
+}
+
+function sortBy(key) {
+  if (_sortCol === key) {
+    _sortDir = _sortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    _sortCol = key;
+    _sortDir = key === 'name' ? 'asc' : 'desc';
+  }
+  renderStatsTable();
+}
+
+// ===== WINNINGS CHART =====
+let _winChart = null;
+
+const CHART_COLORS = [
+  '#22c55e','#3b82f6','#ef4444','#f59e0b','#a855f7',
+  '#06b6d4','#ec4899','#84cc16','#f97316','#6366f1',
+  '#14b8a6','#e11d48',
+];
+
+function renderWinningsChart(winnings) {
+  if (!winnings || !winnings.players) return;
+
+  const ctx = document.getElementById('winningsChart').getContext('2d');
+  if (_winChart) _winChart.destroy();
+
+  const labels = winnings.handLabels || [];
+  // Add initial 0 point
+  const xLabels = ['0', ...labels];
+  const datasets = [];
+  let i = 0;
+
+  // Sort players by final winnings for legend order
+  const entries = Object.entries(winnings.players)
+    .sort((a, b) => b[1][b[1].length - 1] - a[1][a[1].length - 1]);
+
+  for (const [name, vals] of entries) {
+    datasets.push({
+      label: name,
+      data: vals,
+      borderColor: CHART_COLORS[i % CHART_COLORS.length],
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: 0.1,
+    });
+    i++;
+  }
+
+  _winChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: xLabels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          position: 'top',
+          labels: { color: '#94a3b8', usePointStyle: true, pointStyle: 'line', padding: 12 },
+        },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          borderColor: '#334155',
+          borderWidth: 1,
+          titleColor: '#e2e8f0',
+          bodyColor: '#94a3b8',
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)}`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          display: true,
+          title: { display: true, text: 'Hands', color: '#64748b' },
+          ticks: { color: '#475569', maxTicksLimit: 10 },
+          grid: { color: '#1a2332' },
+        },
+        y: {
+          display: true,
+          title: { display: true, text: 'Net Winnings ($)', color: '#64748b' },
+          ticks: { color: '#475569', callback: v => '$' + v },
+          grid: { color: '#1a2332' },
+        },
+      },
+    },
+  });
+}
+
+// ===== EV ANALYSIS =====
+function renderEV(ev) {
+  const card = document.getElementById('evCard');
+  if (!ev || !ev.available) {
+    card.style.display = 'none';
+    return;
+  }
+
+  card.style.display = 'block';
+  const pp = ev.perPlayer || {};
+  const rows = ev.evRows || [];
+
+  let html = '<h3 style="font-size:0.95rem;color:#cbd5e1;margin-bottom:0.75rem;">Per-Player All-in Summary</h3>';
+  html += '<table class="ev-table"><thead><tr><th>Player</th><th class="num"># All-ins</th><th class="num">Actual</th><th class="num">EV</th><th class="num">Diff (A-EV)</th></tr></thead><tbody>';
+
+  for (const [name, agg] of Object.entries(pp).sort((a, b) => b[1].diff - a[1].diff)) {
+    const diffClass = agg.diff > 0.5 ? 'positive' : agg.diff < -0.5 ? 'negative' : 'neutral';
+    html += `<tr><td>${esc(name)}</td><td class="num">${agg.count}</td><td class="num">$${agg.actual.toFixed(2)}</td><td class="num">$${agg.ev.toFixed(2)}</td><td class="num ${diffClass}">${agg.diff > 0 ? '+' : ''}$${agg.diff.toFixed(2)}</td></tr>`;
+  }
+  html += '</tbody></table>';
+
+  if (rows.length > 0) {
+    html += `<p style="margin-top:1rem;color:#64748b;font-size:0.85rem;">${rows.length} all-in hands analyzed</p>`;
+  }
+
+  document.getElementById('evContent').innerHTML = html;
+}
+
+// ===== LEDGER =====
 function renderLedger(data) {
   const { players, settlements } = data;
   const totalPot = players.reduce((s, p) => s + p.buyin, 0);
@@ -314,10 +676,9 @@ function renderLedger(data) {
     </tr>
   `).join('');
 
-  if (settlements.length === 0) {
-    document.getElementById('settlements').innerHTML = '<p style="color:#64748b">No settlements needed.</p>';
-  } else {
-    document.getElementById('settlements').innerHTML = settlements.map(s => `
+  document.getElementById('settlements').innerHTML = settlements.length === 0
+    ? '<p style="color:#64748b">No settlements needed.</p>'
+    : settlements.map(s => `
       <div class="settlement">
         <span class="from">${esc(s.from)}</span>
         <span class="arrow">&#x2192;</span>
@@ -326,115 +687,12 @@ function renderLedger(data) {
         <span class="to">${esc(s.to)}</span>
       </div>
     `).join('');
-  }
-}
-
-let _lastStatsData = null;
-
-function renderStats(data) {
-  _lastStatsData = data;
-  renderStatsView('standard');
-}
-
-function renderStatsView(mode) {
-  const data = _lastStatsData;
-  if (!data) return;
-  const { stats, totalHands, totalBombPots } = data;
-  const isBP = mode === 'bombpot';
-
-  // Update game info with hand count if available
-  const info = document.getElementById('gameInfo');
-  if (info && !document.getElementById('handsStatDiv')) {
-    const handsDiv = document.createElement('div');
-    handsDiv.className = 'stat';
-    handsDiv.id = 'handsStatDiv';
-    handsDiv.innerHTML = `<span class="stat-label">Hands</span><span class="stat-value">${totalHands}</span>`;
-    const firstStat = info.children[0];
-    if (firstStat) firstStat.after(handsDiv);
-  }
-
-  // Toggle buttons
-  let html = `<div style="display:flex; gap:0; margin-bottom:1rem; border-bottom:2px solid #1e293b;">
-    <button class="tab ${!isBP ? 'active' : ''}" onclick="renderStatsView('standard')">Standard</button>
-    <button class="tab ${isBP ? 'active' : ''}" onclick="renderStatsView('bombpot')">Bomb Pot</button>
-  </div>`;
-
-  if (isBP) {
-    html += `<p style="color:#64748b; font-size:0.8rem; margin-bottom:1rem;">Bomb Pot VPIP: % of bomb pot hands where player voluntarily put in money beyond the forced ante (bets, calls, or raises on flop/turn/river).</p>`;
-    html += `<table><thead><tr>
-      <th>Player</th>
-      <th class="num">BP Hands</th>
-      <th class="num">BP VPIP</th>
-      <th style="width: 20%">VPIP Range</th>
-    </tr></thead><tbody>`;
-
-    html += stats.filter(s => s.bpHandsPlayed > 0).map(s => {
-      const barClass = s.bpVpip < 20 ? 'vpip-tight' : s.bpVpip < 30 ? 'vpip-normal' : s.bpVpip < 45 ? 'vpip-loose' : 'vpip-very-loose';
-      return `<tr>
-        <td>${esc(s.name)}</td>
-        <td class="num">${s.bpHandsPlayed}</td>
-        <td class="num">${s.bpVpip.toFixed(1)}%</td>
-        <td><div class="vpip-bar-container"><div class="vpip-bar ${barClass}" style="width: ${Math.min(s.bpVpip, 100)}%"></div></div></td>
-      </tr>`;
-    }).join('');
-
-    if (totalBombPots === 0) html += '<tr><td colspan="4" style="text-align:center;color:#64748b;padding:1rem;">No bomb pot hands found</td></tr>';
-  } else {
-    html += `<table><thead><tr>
-      <th>Player</th>
-      <th class="num">Hands</th>
-      <th class="num">VPIP</th>
-      <th class="num">PFR</th>
-      <th style="width: 20%">VPIP Range</th>
-    </tr></thead><tbody>`;
-
-    html += stats.filter(s => s.handsPlayed > 0).map(s => {
-      const barClass = s.vpip < 20 ? 'vpip-tight' : s.vpip < 30 ? 'vpip-normal' : s.vpip < 45 ? 'vpip-loose' : 'vpip-very-loose';
-      return `<tr>
-        <td>${esc(s.name)}</td>
-        <td class="num">${s.handsPlayed}</td>
-        <td class="num">${s.vpip.toFixed(1)}%</td>
-        <td class="num">${s.pfr.toFixed(1)}%</td>
-        <td><div class="vpip-bar-container"><div class="vpip-bar ${barClass}" style="width: ${Math.min(s.vpip, 100)}%"></div></div></td>
-      </tr>`;
-    }).join('');
-
-    if (totalHands === 0) html += '<tr><td colspan="5" style="text-align:center;color:#64748b;padding:1rem;">No standard hands found</td></tr>';
-  }
-
-  html += '</tbody></table>';
-  document.getElementById('statsContent').innerHTML = html;
-}
-
-function renderStatsError(err) {
-  document.getElementById('statsContent').innerHTML =
-    `<p class="error">Failed to load stats: ${esc(err)}</p>`;
-}
-
-// ===== UI =====
-function showStatus(text, isError) {
-  const el = document.getElementById('status');
-  el.classList.add('visible');
-  el.querySelector('.spinner').style.display = isError ? 'none' : 'block';
-  const textEl = document.getElementById('statusText');
-  textEl.className = isError ? 'error' : '';
-  textEl.textContent = text;
-}
-
-function hideStatus() {
-  document.getElementById('status').classList.remove('visible');
-}
-
-function switchTab(name, btn) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('tab-' + name).classList.add('active');
 }
 
 async function analyze() {
   const input = document.getElementById('gameUrl').value;
-  const gameId = extractGameId(input);
+  const m = input.trim().match(/pokernow\.com\/games\/([a-zA-Z0-9_-]+)/);
+  const gameId = m ? m[1] : (/^[a-zA-Z0-9_-]+$/.test(input.trim()) ? input.trim() : null);
 
   if (!gameId) {
     showStatus('Please enter a valid PokerNow game URL or game ID.', true);
@@ -443,64 +701,66 @@ async function analyze() {
 
   const btn = document.getElementById('analyzeBtn');
   btn.disabled = true;
-  document.getElementById('results').classList.remove('visible');
   showStatus('Fetching ledger...');
 
+  // 1) Fetch ledger (money-only logs — fast)
   try {
-    // Phase 1: Fast ledger (money messages only, ~3 pages)
-    const ledgerRes = await fetch(`/api/ledger/${gameId}`);
-    if (!ledgerRes.ok) {
-      const err = await ledgerRes.json().catch(() => ({}));
-      throw new Error(err.error || `Server returned ${ledgerRes.status}`);
-    }
-    const ledger = await ledgerRes.json();
-    renderLedger(ledger);
-    hideStatus();
-    document.getElementById('results').classList.add('visible');
-
-  } catch (err) {
-    showStatus(err.message, true);
-  }
-
-  btn.disabled = false;
-}
-
-async function uploadCSV(input) {
-  const file = input.files[0];
-  if (!file) return;
-
-  const content = document.getElementById('statsContent');
-  content.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Processing CSV...</div>';
-
-  try {
-    const text = await file.text();
-    const res = await fetch('/api/stats/csv', {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/csv' },
-      body: text,
-    });
+    const res = await fetch(`/api/ledger/${gameId}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || `Server returned ${res.status}`);
     }
-    const stats = await res.json();
-    renderStats(stats);
-    // Make sure results and stats tab are visible
-    document.getElementById('results').classList.add('visible');
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelector('[onclick*="stats"]').classList.add('active');
-    document.getElementById('tab-stats').classList.add('active');
+    renderLedger(await res.json());
+    hideStatus();
+    switchTab('ledger');
   } catch (err) {
-    renderStatsError(err.message);
+    showStatus(err.message, true);
   }
+  btn.disabled = false;
 
-  input.value = ''; // allow re-uploading same file
+  // 2) Fetch stats in background (full logs — slower, non-blocking)
+  fetchGameStats(gameId);
 }
 
+async function fetchGameStats(gameId) {
+  const info = document.getElementById('statsSourceInfo');
+  const zone = document.getElementById('uploadZone');
+  info.style.display = 'block';
+  info.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:0.5rem;"></span> Loading stats...';
+
+  try {
+    const res = await fetch(`/api/stats/${gameId}`);
+    const data = await res.json();
+
+    if (data.error === 'upload_required') {
+      // Plus API not available — prompt file upload
+      info.style.display = 'none';
+      zone.style.display = 'block';
+      zone.innerHTML = `
+        <p>Upload your hand history for detailed stats</p>
+        <p class="hint">Download the CSV from your PokerNow game, or JSON from the Replayer, then drop it here</p>
+      `;
+      return;
+    }
+
+    if (!res.ok) throw new Error(data.error || data.message || `Server returned ${res.status}`);
+
+    data.format = 'live';
+    renderFullStats(data);
+    info.innerHTML = 'Stats loaded — ' + data.totalHands + ' hands analyzed';
+    zone.innerHTML = '<p class="hint">Drop a file to load different data</p>';
+    zone.style.display = 'block';
+  } catch (err) {
+    info.innerHTML = '<span class="error">Stats: ' + esc(err.message) + '</span>';
+    zone.style.display = 'block';
+  }
+}
+
+// ===== INIT =====
 document.getElementById('gameUrl').addEventListener('keydown', e => {
   if (e.key === 'Enter') analyze();
 });
+
 </script>
 </body>
 </html>

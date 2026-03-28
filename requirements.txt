@@ -2,3 +2,4 @@ python-socketio[client]
 websocket-client
 requests
 simple-websocket
+eval7
