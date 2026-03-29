@@ -288,8 +288,8 @@ def _parse_event_line(line, id_to_seat):
 
     # Bomb pot
     if _BOMB_RE.search(line):
-        # Bomb pot ante — extract player and amount if present
-        m2 = re.search(_PLAYER_RE + r'.*bomb pot.*?([\d.]+)', line)
+        # Bomb pot ante — amount comes BEFORE "bomb pot" in the line
+        m2 = re.search(_PLAYER_RE + r'.*?([\d.]+).*bomb pot', line)
         if m2:
             seat = _seat(m2.group(2))
             payload = {'type': 1, 'seat': seat, 'value': float(m2.group(3))}
