@@ -864,14 +864,20 @@ def _contribs_until(hand, until_idx):
 
 
 def _board_up_to(hand, idx):
-    board = []
+    """Return board cards up to idx. Returns (board1, board2) if double board, else (board1, None)."""
+    board1 = []
+    board2 = []
     for i, ev in enumerate(hand.get('events', [])):
         if i > idx:
             break
         pl = ev.get('payload', {})
         if pl.get('type') == COMMUNITY and pl.get('cards'):
-            board.extend(pl['cards'])
-    return board
+            board_num = pl.get('board', 1)
+            if board_num == 2:
+                board2.extend(pl['cards'])
+            else:
+                board1.extend(pl['cards'])
+    return board1, board2 if board2 else None
 
 
 def _collect_hole_cards(hand):
@@ -953,10 +959,10 @@ def _expected_payout(hand, lock_idx, mc_trials):
     if not is_holdem and not omaha:
         return None, f'Unsupported game type: {gt}'
 
-    min_hole = 4 if omaha else 2  # PLO needs 4+, Hold'em needs 2
+    min_hole = 4 if omaha else 2
 
-    board = _board_up_to(hand, lock_idx)
-    missing = 5 - len(board)
+    board1, board2 = _board_up_to(hand, lock_idx)
+    is_double = board2 is not None and len(board2) > 0
 
     settle_idx = _settlement_idx(hand, lock_idx)
     committed, folded = _contribs_until(hand, settle_idx)
@@ -981,57 +987,88 @@ def _expected_payout(hand, lock_idx, mc_trials):
     # Build eval7 card objects
     try:
         e7_hole = [[eval7.Card(c) for c in h] for h in hole]
-        e7_board = [eval7.Card(c) for c in board]
+        e7_board1 = [eval7.Card(c) for c in board1]
+        e7_board2 = [eval7.Card(c) for c in board2] if is_double else []
     except Exception:
         return None, 'Card parse error'
 
-    deck = eval7.Deck()
-    known = set()
+    # Build deck minus ALL known cards (hole cards + both boards)
+    known_cards = set()
     for h in hole:
-        known.update(h)
-    known.update(board)
-    for cs in known:
+        known_cards.update(h)
+    known_cards.update(board1)
+    if is_double:
+        known_cards.update(board2)
+
+    deck = eval7.Deck()
+    for cs in known_cards:
         deck.cards.remove(eval7.Card(cs))
 
     seat_idx = {s: i for i, s in enumerate(seats)}
-    payouts = [0.0] * len(seats)
+    n = len(seats)
+    payouts = [0.0] * n
 
-    def _score_and_pay(full_board):
+    missing1 = 5 - len(e7_board1)
+    missing2 = (5 - len(e7_board2)) if is_double else 0
+    total_missing = missing1 + missing2
+
+    def _board_winners(full_board):
+        """Return list of winner indices per pot for one board."""
         scores = _evaluate_hands(e7_hole, full_board, omaha)
+        result = []
         for pot_size, elig in pots:
             idxs = [seat_idx[s] for s in elig]
             best = max(scores[i] for i in idxs)
             winners = [i for i in idxs if scores[i] == best]
-            share = pot_size / len(winners)
-            for i in winners:
-                payouts[i] += share
+            result.append(winners)
+        return result
 
-    if missing == 0:
-        _score_and_pay(e7_board)
-        # payouts are already final
-    elif missing <= 2 and not omaha:
-        # Exact enumeration (fast for Hold'em with 1-2 cards to come)
+    def _pay_trial(fb1, fb2=None):
+        """Award payouts for one trial. Double board splits each pot 50/50."""
+        w1 = _board_winners(fb1)
+        if fb2 is not None:
+            w2 = _board_winners(fb2)
+            for pi, (pot_size, elig) in enumerate(pots):
+                half = pot_size / 2.0
+                for i in w1[pi]:
+                    payouts[i] += half / len(w1[pi])
+                for i in w2[pi]:
+                    payouts[i] += half / len(w2[pi])
+        else:
+            for pi, (pot_size, elig) in enumerate(pots):
+                for i in w1[pi]:
+                    payouts[i] += pot_size / len(w1[pi])
+
+    if total_missing == 0:
+        # All cards known — evaluate directly
+        _pay_trial(e7_board1, e7_board2 if is_double else None)
+    elif total_missing <= 2 and not omaha and not is_double:
+        # Exact enumeration (single board Hold'em with 1-2 missing)
         total = 0
-        for extra in itertools.combinations(deck.cards, missing):
-            fb = e7_board + list(extra)
-            _score_and_pay(fb)
+        for extra in itertools.combinations(deck.cards, total_missing):
+            _pay_trial(e7_board1 + list(extra))
             total += 1
         payouts = [p / total if total else 0 for p in payouts]
     else:
-        # Monte Carlo (used for Omaha always, or Hold'em with 3+ missing)
+        # Monte Carlo — draw for BOTH boards from the same deck simultaneously
         for _ in range(mc_trials):
             deck.shuffle()
-            draw = deck.peek(missing)
-            fb = e7_board + list(draw)
-            _score_and_pay(fb)
+            draw = deck.peek(total_missing)
+            fb1 = e7_board1 + list(draw[:missing1])
+            fb2 = (e7_board2 + list(draw[missing1:total_missing])) if is_double else None
+            _pay_trial(fb1, fb2)
         payouts = [p / mc_trials for p in payouts]
 
     exp_by_name = {names[i]: payouts[i] for i in range(len(names))}
     locked = {seat_to_name[s]: committed.get(s, 0.0) for s in survivors}
     hands_by_name = {names[i]: hole[i] for i in range(len(names))}
 
+    board_display = board1
+    if is_double:
+        board_display = board1 + ['|'] + board2
+
     info = {
-        'board': board,
+        'board': board_display,
         'names': names,
         'hands_by_name': hands_by_name,
         'settle_idx': settle_idx,

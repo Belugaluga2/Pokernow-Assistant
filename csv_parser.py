@@ -85,10 +85,14 @@ _RAISE_RE = re.compile(_PLAYER_RE + r' raises to ([\d.]+)(?:\s+and go all in)?')
 _BET_RE   = re.compile(_PLAYER_RE + r' bets ([\d.]+)(?:\s+and go all in)?')
 _ALLIN_RE = re.compile(r'and go all in')
 
-# Board
-_FLOP_RE  = re.compile(r'Flop:\s*(.+)')
-_TURN_RE  = re.compile(r'Turn:\s*(.+)')
-_RIVER_RE = re.compile(r'River:\s*(.+)')
+# Board (first board)
+_FLOP_RE  = re.compile(r'^Flop:\s*(.+)')
+_TURN_RE  = re.compile(r'^Turn:\s*(.+)')
+_RIVER_RE = re.compile(r'^River:\s*(.+)')
+# Second board
+_FLOP2_RE  = re.compile(r'^Flop \(second board\):\s*(.+)')
+_TURN2_RE  = re.compile(r'^Turn \(second board\):\s*(.+)')
+_RIVER2_RE = re.compile(r'^River \(second board\):\s*(.+)')
 
 # Outcomes
 _COLLECT_RE  = re.compile(_PLAYER_RE + r' collected ([\d.]+) from pot')
@@ -332,23 +336,42 @@ def _parse_event_line(line, id_to_seat):
             payload['allIn'] = True
         return {'payload': payload}
 
-    # Flop
+    # Second board flop/turn/river (check BEFORE first board to avoid false match)
+    m = _FLOP2_RE.search(line)
+    if m:
+        cards = _parse_cards_from_text(m.group(1))
+        return {'payload': {'type': 9, 'cards': cards, 'board': 2}}
+
+    m = _TURN2_RE.search(line)
+    if m:
+        text = m.group(1)
+        bracket = re.search(r'\[([^\]]+)\]\s*$', text)
+        cards = _parse_cards_from_text(bracket.group(1)) if bracket else _parse_cards_from_text(text)
+        return {'payload': {'type': 9, 'cards': cards, 'board': 2}}
+
+    m = _RIVER2_RE.search(line)
+    if m:
+        text = m.group(1)
+        bracket = re.search(r'\[([^\]]+)\]\s*$', text)
+        cards = _parse_cards_from_text(bracket.group(1)) if bracket else _parse_cards_from_text(text)
+        return {'payload': {'type': 9, 'cards': cards, 'board': 2}}
+
+    # First board flop
     m = _FLOP_RE.search(line)
     if m:
         cards = _parse_cards_from_text(m.group(1))
-        return {'payload': {'type': 9, 'cards': cards}}
+        return {'payload': {'type': 9, 'cards': cards, 'board': 1}}
 
     # Turn — format: "Turn: prev_cards [new_card]"
     m = _TURN_RE.search(line)
     if m:
         text = m.group(1)
-        # The new card is in the last bracket pair
         bracket = re.search(r'\[([^\]]+)\]\s*$', text)
         if bracket:
             cards = _parse_cards_from_text(bracket.group(1))
         else:
             cards = _parse_cards_from_text(text)
-        return {'payload': {'type': 9, 'cards': cards}}
+        return {'payload': {'type': 9, 'cards': cards, 'board': 1}}
 
     # River — same format as turn
     m = _RIVER_RE.search(line)
@@ -359,7 +382,7 @@ def _parse_event_line(line, id_to_seat):
             cards = _parse_cards_from_text(bracket.group(1))
         else:
             cards = _parse_cards_from_text(text)
-        return {'payload': {'type': 9, 'cards': cards}}
+        return {'payload': {'type': 9, 'cards': cards, 'board': 1}}
 
     # Collected from pot
     m = _COLLECT_RE.search(line)
