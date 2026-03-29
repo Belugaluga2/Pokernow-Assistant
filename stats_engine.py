@@ -730,10 +730,12 @@ def compute_allin_ev(hands, mc_trials=50000):
 
     for hand in hands:
         lock_idx = _find_allin_lock(hand)
+        # Use fewer trials for Omaha (60-100 evals per trial vs 1 for Hold'em)
+        trials = 10000 if _is_omaha(hand.get('gameType', '')) else mc_trials
         if lock_idx is None:
             continue
 
-        exp, info = _expected_payout(hand, lock_idx, mc_trials)
+        exp, info = _expected_payout(hand, lock_idx, trials)
         if exp is None:
             continue
 
@@ -870,17 +872,20 @@ def _board_up_to(hand, idx):
 
 
 def _collect_hole_cards(hand):
+    """Collect all hole cards per seat (2 for Hold'em, 4 for PLO, 5 for PLO5)."""
     seat_to_cards = {}
     for p in hand.get('players', []):
         hc = p.get('hand')
-        if hc and len(hc) >= 2 and all(hc[:2]):
-            seat_to_cards[p['seat']] = list(hc[:2])
+        if hc:
+            valid = [c for c in hc if c]
+            if len(valid) >= 2:
+                seat_to_cards[p['seat']] = valid
     for ev in hand.get('events', []):
         pl = ev.get('payload', {})
         if pl.get('type') == SHOW_MUCK and pl.get('cards'):
             c = [x for x in pl['cards'] if x]
             if len(c) >= 2:
-                seat_to_cards[pl.get('seat')] = c[:2]
+                seat_to_cards[pl.get('seat')] = c
     return seat_to_cards
 
 
@@ -913,9 +918,39 @@ def _actual_payouts_after(hand, from_idx):
     return out
 
 
+def _is_omaha(game_type):
+    """Check if the game type is any Omaha variant."""
+    gt = str(game_type).lower()
+    return 'omaha' in gt or gt in ('oh', 'plo', 'plo5')
+
+
+def _best_omaha_hand(hole_e7, board_e7):
+    """Evaluate the best Omaha hand: must use exactly 2 from hole + 3 from board."""
+    best = 0
+    for h2 in itertools.combinations(hole_e7, 2):
+        for b3 in itertools.combinations(board_e7, 3):
+            score = eval7.evaluate(list(h2) + list(b3))
+            if score > best:
+                best = score
+    return best
+
+
+def _evaluate_hands(e7_hole, e7_board_full, is_omaha):
+    """Score each player's hand. Uses Omaha rules if is_omaha, else Hold'em."""
+    if is_omaha:
+        return [_best_omaha_hand(h, e7_board_full) for h in e7_hole]
+    else:
+        return [eval7.evaluate(h + e7_board_full) for h in e7_hole]
+
+
 def _expected_payout(hand, lock_idx, mc_trials):
-    if str(hand.get('gameType', '')).lower() not in ('th', 'he', 'holdem'):
-        return None, 'Non-holdem'
+    gt = str(hand.get('gameType', '')).lower()
+    is_holdem = gt in ('th', 'he', 'holdem')
+    omaha = _is_omaha(hand.get('gameType', ''))
+    if not is_holdem and not omaha:
+        return None, f'Unsupported game type: {gt}'
+
+    min_hole = 4 if omaha else 2  # PLO needs 4+, Hold'em needs 2
 
     board = _board_up_to(hand, lock_idx)
     missing = 5 - len(board)
@@ -933,14 +968,14 @@ def _expected_payout(hand, lock_idx, mc_trials):
     seat_to_name = {p['seat']: p['name'] for p in hand.get('players', [])}
     known_hole = _collect_hole_cards(hand)
     for s in survivors:
-        if s not in known_hole or len(known_hole[s]) < 2:
+        if s not in known_hole or len(known_hole[s]) < min_hole:
             return None, f'Missing cards for {seat_to_name.get(s)}'
 
     seats = list(survivors)
     names = [seat_to_name[s] for s in seats]
     hole = [known_hole[s] for s in seats]
 
-    # Build eval7 hands
+    # Build eval7 card objects
     try:
         e7_hole = [[eval7.Card(c) for c in h] for h in hole]
         e7_board = [eval7.Card(c) for c in board]
@@ -958,33 +993,34 @@ def _expected_payout(hand, lock_idx, mc_trials):
     seat_idx = {s: i for i, s in enumerate(seats)}
     payouts = [0.0] * len(seats)
 
-    if missing <= 2:
+    def _score_and_pay(full_board):
+        scores = _evaluate_hands(e7_hole, full_board, omaha)
+        for pot_size, elig in pots:
+            idxs = [seat_idx[s] for s in elig]
+            best = max(scores[i] for i in idxs)
+            winners = [i for i in idxs if scores[i] == best]
+            share = pot_size / len(winners)
+            for i in winners:
+                payouts[i] += share
+
+    if missing == 0:
+        _score_and_pay(e7_board)
+        # payouts are already final
+    elif missing <= 2 and not omaha:
+        # Exact enumeration (fast for Hold'em with 1-2 cards to come)
         total = 0
         for extra in itertools.combinations(deck.cards, missing):
             fb = e7_board + list(extra)
-            scores = [eval7.evaluate(h + fb) for h in e7_hole]
-            for pot_size, elig in pots:
-                idxs = [seat_idx[s] for s in elig]
-                best = max(scores[i] for i in idxs)
-                winners = [i for i in idxs if scores[i] == best]
-                share = pot_size / len(winners)
-                for i in winners:
-                    payouts[i] += share
+            _score_and_pay(fb)
             total += 1
         payouts = [p / total if total else 0 for p in payouts]
     else:
+        # Monte Carlo (used for Omaha always, or Hold'em with 3+ missing)
         for _ in range(mc_trials):
             deck.shuffle()
             draw = deck.peek(missing)
             fb = e7_board + list(draw)
-            scores = [eval7.evaluate(h + fb) for h in e7_hole]
-            for pot_size, elig in pots:
-                idxs = [seat_idx[s] for s in elig]
-                best = max(scores[i] for i in idxs)
-                winners = [i for i in idxs if scores[i] == best]
-                share = pot_size / len(winners)
-                for i in winners:
-                    payouts[i] += share
+            _score_and_pay(fb)
         payouts = [p / mc_trials for p in payouts]
 
     exp_by_name = {names[i]: payouts[i] for i in range(len(names))}
