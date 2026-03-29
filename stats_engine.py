@@ -713,6 +713,17 @@ def has_eval7():
 def compute_allin_ev(hands, mc_trials=33000):
     """Compute all-in EV for each hand where all-in occurs.
 
+    For each all-in hand, computes:
+      - committed: how much each player put into the pot
+      - ev_payout: expected payout based on equity (MC simulation)
+      - actual_payout: what PokerNow actually paid out
+      - ev_net = ev_payout - committed
+      - actual_net = actual_payout - committed
+      - diff = actual_net - ev_net = actual_payout - ev_payout
+
+    Since both ev_payout and actual_payout distribute the same total pot,
+    sum(diff) across all players in a hand is always 0.
+
     Returns {
       "perPlayer": {name: {"count","actual","ev","diff"}},
       "evRows": [{hand_number, board, players:[{name,hand,equity,ev,actual,diff}]}],
@@ -730,7 +741,6 @@ def compute_allin_ev(hands, mc_trials=33000):
 
     for hand in hands:
         lock_idx = _find_allin_lock(hand)
-        # Use fewer trials for Omaha (60-100 evals per trial vs 1 for Hold'em)
         if _is_omaha(hand.get('gameType', '')):
             trials = 1300 if '5' in str(hand.get('gameType', '')) else 3300
         else:
@@ -743,32 +753,46 @@ def compute_allin_ev(hands, mc_trials=33000):
             continue
 
         seat_to_name = {p['seat']: p['name'] for p in hand.get('players', [])}
-        actual_by_seat = _actual_payouts_after(hand, info['settle_idx'])
+        names = info['names']
+
+        # Get actual payouts from ALL payout events in the hand (not from a partial index)
+        actual_by_seat = defaultdict(float)
+        for ev in hand.get('events', []):
+            pl = ev.get('payload', {})
+            if pl.get('type') == PAYOUT and pl.get('value'):
+                actual_by_seat[pl.get('seat')] += float(pl['value'])
         actual = defaultdict(float)
         for s, v in actual_by_seat.items():
             actual[seat_to_name.get(s, str(s))] += v
 
-        names = info['names']
+        # Get committed amounts for each survivor
+        committed_by_name = info['locked']  # locked = committed per survivor
+
         ev_total = sum(exp.get(n, 0.0) for n in names)
 
         players_detail = []
         for n in names:
-            a = actual.get(n, 0.0) * scale
-            e = exp.get(n, 0.0) * scale
+            a_payout = actual.get(n, 0.0) * scale
+            e_payout = exp.get(n, 0.0) * scale
+            invested = committed_by_name.get(n, 0.0) * scale
             eq = (exp.get(n, 0.0) / ev_total) if ev_total > 1e-12 else 0.0
-            locked = info['locked'].get(n, 0.0) * scale
+
+            a_net = a_payout - invested
+            e_net = e_payout - invested
+            diff = a_net - e_net  # same as a_payout - e_payout
+
             players_detail.append({
                 'name': n,
                 'hand': ' '.join(info['hands_by_name'].get(n, [])),
                 'equity': round(eq * 100, 1),
-                'ev': round(e, 2),
-                'actual': round(a, 2),
-                'diff': round(a - e, 2),
+                'ev': round(e_net, 2),
+                'actual': round(a_net, 2),
+                'diff': round(diff, 2),
             })
             per_player[n]['count'] += 1
-            per_player[n]['actual'] += (a - locked)
-            per_player[n]['ev'] += (e - locked)
-            per_player[n]['diff'] += (a - e)
+            per_player[n]['actual'] += a_net
+            per_player[n]['ev'] += e_net
+            per_player[n]['diff'] += diff
 
         rows.append({
             'handNumber': hand.get('number'),
@@ -964,8 +988,9 @@ def _expected_payout(hand, lock_idx, mc_trials):
     board1, board2 = _board_up_to(hand, lock_idx)
     is_double = board2 is not None and len(board2) > 0
 
-    settle_idx = _settlement_idx(hand, lock_idx)
-    committed, folded = _contribs_until(hand, settle_idx)
+    # Use ALL events to get final committed amounts and folds
+    all_events_idx = len(hand.get('events', [])) - 1
+    committed, folded = _contribs_until(hand, all_events_idx)
     survivors = [s for s, v in committed.items() if v > 0 and s not in folded]
     if len(survivors) < 2:
         return None, 'Too few survivors'
@@ -1071,7 +1096,6 @@ def _expected_payout(hand, lock_idx, mc_trials):
         'board': board_display,
         'names': names,
         'hands_by_name': hands_by_name,
-        'settle_idx': settle_idx,
         'locked': locked,
     }
     return exp_by_name, info
