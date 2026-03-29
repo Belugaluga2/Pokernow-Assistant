@@ -354,7 +354,12 @@ def _compute_stats_from_hands(hands):
     """Compute all stats from parsed hand list."""
     result = compute_all_stats(hands)
     result['winnings'] = compute_winnings(hands)
-    result['ev'] = compute_allin_ev(hands) if has_eval7() else {'available': False}
+    try:
+        result['ev'] = compute_allin_ev(hands) if has_eval7() else {'available': False}
+    except Exception as e:
+        print(f'  EV computation error: {e}')
+        import traceback; traceback.print_exc()
+        result['ev'] = {'available': False, 'error': str(e)}
     return result
 
 
@@ -452,7 +457,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
                 result = compute_all_stats(hands)
                 result['winnings'] = compute_winnings(hands)
-                result['ev'] = compute_allin_ev(hands) if has_eval7() else {'available': False}
+                try:
+                    result['ev'] = compute_allin_ev(hands) if has_eval7() else {'available': False}
+                except Exception as ev_err:
+                    print(f'  EV computation error: {ev_err}')
+                    import traceback; traceback.print_exc()
+                    result['ev'] = {'available': False, 'error': str(ev_err)}
                 result['format'] = fmt
                 self._json_response(200, result)
             except Exception as e:
