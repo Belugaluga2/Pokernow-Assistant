@@ -379,6 +379,7 @@ async function processFile(file) {
 
   try {
     const text = await file.text();
+    _lastUploadedFile = text;  // store for on-demand EV
     const res = await fetch('/api/stats/upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/octet-stream' },
@@ -466,9 +467,11 @@ function renderFullStats(data) {
   // Winnings chart
   renderWinningsChart(data.winnings);
 
-  // EV analysis
+  // EV analysis — show button instead of auto-computing
   renderEV(data.ev);
 }
+
+let _lastUploadedFile = null;  // store file text for on-demand EV
 
 function switchStatTab(name, btn) {
   _currentStatTab = name;
@@ -635,6 +638,16 @@ function renderEV(ev) {
   }
 
   card.style.display = 'block';
+
+  // Not yet computed — show button
+  if (!ev.computed && !ev.perPlayer) {
+    document.getElementById('evContent').innerHTML = `
+      <p style="color:#94a3b8; margin-bottom:1rem;">Monte Carlo equity simulation for all-in hands. This may take a moment.</p>
+      <button class="btn btn-sm" onclick="computeEV()">Compute All-in EV</button>
+    `;
+    return;
+  }
+
   const pp = ev.perPlayer || {};
   const rows = ev.evRows || [];
 
@@ -652,6 +665,32 @@ function renderEV(ev) {
   }
 
   document.getElementById('evContent').innerHTML = html;
+}
+
+async function computeEV() {
+  if (!_lastUploadedFile) {
+    document.getElementById('evContent').innerHTML = '<p class="error">No file data available. Please re-upload your CSV.</p>';
+    return;
+  }
+
+  document.getElementById('evContent').innerHTML = '<div style="color:#94a3b8"><span class="spinner" style="width:20px;height:20px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:0.5rem;"></span> Computing all-in EV (this may take a minute)...</div>';
+
+  try {
+    const res = await fetch('/api/stats/ev', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: _lastUploadedFile,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Server returned ${res.status}`);
+    }
+    const ev = await res.json();
+    ev.computed = true;
+    renderEV(ev);
+  } catch (err) {
+    document.getElementById('evContent').innerHTML = `<p class="error">EV Error: ${esc(err.message)}</p><button class="btn btn-sm btn-outline" style="margin-top:0.5rem" onclick="computeEV()">Retry</button>`;
+  }
 }
 
 // ===== LEDGER =====

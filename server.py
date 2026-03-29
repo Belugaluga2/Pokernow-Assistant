@@ -351,15 +351,10 @@ def try_fetch_hand_json(game_id):
 
 
 def _compute_stats_from_hands(hands):
-    """Compute all stats from parsed hand list."""
+    """Compute all stats from parsed hand list (without EV — that's on-demand)."""
     result = compute_all_stats(hands)
     result['winnings'] = compute_winnings(hands)
-    try:
-        result['ev'] = compute_allin_ev(hands) if has_eval7() else {'available': False}
-    except Exception as e:
-        print(f'  EV computation error: {e}')
-        import traceback; traceback.print_exc()
-        result['ev'] = {'available': False, 'error': str(e)}
+    result['ev'] = {'available': has_eval7(), 'computed': False}
     return result
 
 
@@ -457,16 +452,36 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
                 result = compute_all_stats(hands)
                 result['winnings'] = compute_winnings(hands)
-                try:
-                    result['ev'] = compute_allin_ev(hands) if has_eval7() else {'available': False}
-                except Exception as ev_err:
-                    print(f'  EV computation error: {ev_err}')
-                    import traceback; traceback.print_exc()
-                    result['ev'] = {'available': False, 'error': str(ev_err)}
+                result['ev'] = {'available': has_eval7(), 'computed': False}
                 result['format'] = fmt
                 self._json_response(200, result)
             except Exception as e:
                 print(f'  ERROR parsing upload: {e}')
+                self._json_response(400, {'error': str(e)})
+            return
+
+        # POST /api/stats/ev — on-demand all-in EV computation
+        if self.path == '/api/stats/ev':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = self.rfile.read(length).decode('utf-8', errors='replace')
+
+                hands, fmt = parse_hand_data(body)
+                print(f'  Computing EV for {len(hands)} hands from {fmt} upload...')
+
+                if not hands:
+                    self._json_response(400, {'error': 'No hands found'})
+                    return
+
+                if not has_eval7():
+                    self._json_response(400, {'error': 'eval7 not available on server'})
+                    return
+
+                ev = compute_allin_ev(hands)
+                self._json_response(200, ev)
+            except Exception as e:
+                print(f'  ERROR computing EV: {e}')
+                import traceback; traceback.print_exc()
                 self._json_response(400, {'error': str(e)})
             return
 
