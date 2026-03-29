@@ -732,7 +732,7 @@ def compute_allin_ev(hands, mc_trials=50000):
         lock_idx = _find_allin_lock(hand)
         # Use fewer trials for Omaha (60-100 evals per trial vs 1 for Hold'em)
         if _is_omaha(hand.get('gameType', '')):
-            trials = 5000 if '5' in str(hand.get('gameType', '')) else 10000
+            trials = 2000 if '5' in str(hand.get('gameType', '')) else 5000
         else:
             trials = mc_trials
         if lock_idx is None:
