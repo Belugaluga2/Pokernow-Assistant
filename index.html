@@ -86,6 +86,17 @@
 
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  .progress-bar-container {
+    width: 100%; max-width: 320px; height: 6px;
+    background: #1e293b; border-radius: 3px;
+    margin: 0 auto 1rem; overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%; width: 0%; border-radius: 3px;
+    background: linear-gradient(90deg, #22c55e, #16a34a);
+    transition: width 0.3s ease;
+  }
+
   .error { color: #ef4444; }
 
   /* Main tabs */
@@ -161,15 +172,32 @@
   .neutral { color: #94a3b8; }
 
   .settlement {
-    display: flex; align-items: center; padding: 0.6rem 0;
-    border-bottom: 1px solid #1a2332; gap: 0.75rem; font-size: 0.9rem;
+    display: flex; align-items: center; padding: 0.6rem 0.75rem;
+    gap: 0.75rem; font-size: 0.9rem;
+    background: rgba(15, 17, 23, 0.4);
+    border-radius: 6px;
+    margin-bottom: 0.35rem;
   }
+  .settlement.forced { border: 1px dashed rgba(245,158,11,0.3); }
 
-  .settlement:last-child { border-bottom: none; }
   .settlement .from { color: #ef4444; font-weight: 600; min-width: 100px; text-align: right; }
   .settlement .arrow { color: #475569; }
   .settlement .amount { color: #facc15; font-weight: 700; font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace; }
   .settlement .to { color: #22c55e; font-weight: 600; }
+  .settlement .forced-tag { color: #f59e0b; font-size: 0.7rem; margin-left: auto; opacity: 0.8; }
+
+  .force-controls { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #1a2332; }
+  .force-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+  .force-row select {
+    background: #0f1117; border: 1px solid #334155; border-radius: 6px;
+    color: #e2e8f0; padding: 0.35rem 0.5rem; font-size: 0.85rem; cursor: pointer;
+  }
+  .force-row select:focus { border-color: #22c55e; outline: none; }
+  .force-row .force-label { color: #64748b; font-size: 0.8rem; }
+  .force-remove { background: none; border: 1px solid rgba(239,68,68,0.3); color: #ef4444; cursor: pointer; border-radius: 4px; padding: 0.15rem 0.45rem; font-size: 0.8rem; transition: all 0.15s; }
+  .force-remove:hover { background: rgba(239,68,68,0.1); border-color: #ef4444; }
+  .force-add { font-size: 0.8rem; padding: 0.35rem 0.75rem; background: none; border: 1px dashed #334155; border-radius: 6px; color: #94a3b8; cursor: pointer; transition: all 0.15s; }
+  .force-add:hover { border-color: #22c55e; color: #22c55e; }
 
   .game-info { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
   .game-info .stat { display: flex; flex-direction: column; }
@@ -320,6 +348,7 @@
 
   <div class="status" id="status">
     <div class="spinner"></div>
+    <div class="progress-bar-container" id="progressBar" style="display:none"><div class="progress-bar-fill" id="progressFill"></div></div>
     <div id="statusText">Fetching game data...</div>
   </div>
 
@@ -422,16 +451,58 @@ function switchTab(name, btn) {
   document.getElementById('tab-' + name).classList.add('active');
 }
 
-function showStatus(text, isError) {
+let _progressTimer = null;
+
+function showStatus(text, isError, useProgress) {
   const el = document.getElementById('status');
   el.classList.add('visible');
-  el.querySelector('.spinner').style.display = isError ? 'none' : 'block';
+  const spinner = el.querySelector('.spinner');
+  const bar = document.getElementById('progressBar');
+  const fill = document.getElementById('progressFill');
+
+  if (isError) {
+    spinner.style.display = 'none';
+    bar.style.display = 'none';
+    _stopProgress();
+  } else if (useProgress) {
+    spinner.style.display = 'none';
+    bar.style.display = 'block';
+    fill.style.width = '0%';
+    _startProgress();
+  } else {
+    spinner.style.display = 'block';
+    bar.style.display = 'none';
+    _stopProgress();
+  }
+
   const t = document.getElementById('statusText');
   t.className = isError ? 'error' : '';
   t.textContent = text;
 }
 
-function hideStatus() { document.getElementById('status').classList.remove('visible'); }
+function _startProgress() {
+  _stopProgress();
+  let pct = 0;
+  const fill = document.getElementById('progressFill');
+  _progressTimer = setInterval(() => {
+    pct += (90 - pct) * 0.08;
+    fill.style.width = pct + '%';
+  }, 200);
+}
+
+function _stopProgress() {
+  if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
+}
+
+function hideStatus() {
+  const fill = document.getElementById('progressFill');
+  fill.style.width = '100%';
+  _stopProgress();
+  setTimeout(() => {
+    document.getElementById('status').classList.remove('visible');
+    fill.style.width = '0%';
+  }, 300);
+}
 
 // ===== UPLOAD HANDLING =====
 document.getElementById('uploadZone').addEventListener('click', () => {
@@ -1240,14 +1311,100 @@ function bpSort(col) {
 }
 
 // ===== LEDGER =====
+let _ledgerData = null;
+let _forcedPairs = [];
+
+function _computeSettlements(players, forcedPairs) {
+  const nets = {};
+  for (const p of players) nets[p.name] = p.net;
+
+  const settlements = [];
+
+  // Process forced pairs first
+  for (const fp of forcedPairs) {
+    const fromNet = nets[fp.from] || 0;
+    const toNet = nets[fp.to] || 0;
+    if (fromNet >= -0.005 || toNet <= 0.005) continue;
+    const amount = Math.round(Math.min(Math.abs(fromNet), toNet) * 100) / 100;
+    if (amount < 0.01) continue;
+    settlements.push({ from: fp.from, to: fp.to, amount, forced: true });
+    nets[fp.from] = Math.round((nets[fp.from] + amount) * 100) / 100;
+    nets[fp.to] = Math.round((nets[fp.to] - amount) * 100) / 100;
+  }
+
+  // Greedy matching for the rest
+  const debtors = Object.entries(nets).filter(([,v]) => v < -0.005).map(([n,v]) => ({name:n, r:Math.round(Math.abs(v)*100)/100}));
+  const creditors = Object.entries(nets).filter(([,v]) => v > 0.005).map(([n,v]) => ({name:n, r:Math.round(v*100)/100}));
+  debtors.sort((a,b) => b.r - a.r);
+  creditors.sort((a,b) => b.r - a.r);
+
+  let i = 0, j = 0;
+  while (i < debtors.length && j < creditors.length) {
+    const amount = Math.round(Math.min(debtors[i].r, creditors[j].r) * 100) / 100;
+    if (amount > 0.005) settlements.push({ from: debtors[i].name, to: creditors[j].name, amount });
+    debtors[i].r -= amount;
+    creditors[j].r -= amount;
+    if (debtors[i].r < 0.01) i++;
+    if (creditors[j].r < 0.01) j++;
+  }
+  return settlements;
+}
+
+function _renderSettlements() {
+  if (!_ledgerData) return;
+  const settlements = _computeSettlements(_ledgerData.players, _forcedPairs);
+
+  // Build debtor/creditor lists for dropdowns
+  const debtors = _ledgerData.players.filter(p => p.net < -0.005);
+  const creditors = _ledgerData.players.filter(p => p.net > 0.005);
+
+  let html = '';
+  if (settlements.length > 0) {
+    html += settlements.map(s => `
+      <div class="settlement${s.forced ? ' forced' : ''}">
+        <span class="from">${esc(s.from)}</span>
+        <span class="arrow">&#x2192;</span>
+        <span class="amount">$${s.amount.toFixed(2)}</span>
+        <span class="arrow">&#x2192;</span>
+        <span class="to">${esc(s.to)}</span>
+        ${s.forced ? '<span class="forced-tag">forced</span>' : ''}
+      </div>
+    `).join('');
+  } else {
+    html = '<p style="color:#64748b">No settlements needed.</p>';
+  }
+
+  // Forced pair controls
+  html += '<div class="force-controls">';
+  for (let k = 0; k < _forcedPairs.length; k++) {
+    html += `<div class="force-row">
+      <select onchange="_forcedPairs[${k}].from=this.value;_renderSettlements()">
+        ${debtors.map(d => `<option value="${esc(d.name)}"${d.name===_forcedPairs[k].from?' selected':''}>${esc(d.name)}</option>`).join('')}
+      </select>
+      <span class="force-label">pays</span>
+      <select onchange="_forcedPairs[${k}].to=this.value;_renderSettlements()">
+        ${creditors.map(c => `<option value="${esc(c.name)}"${c.name===_forcedPairs[k].to?' selected':''}>${esc(c.name)}</option>`).join('')}
+      </select>
+      <button class="force-remove" onclick="_forcedPairs.splice(${k},1);_renderSettlements()">&times;</button>
+    </div>`;
+  }
+  if (debtors.length > 0 && creditors.length > 0) {
+    html += `<button class="force-add" onclick="_forcedPairs.push({from:'${esc(debtors[0].name)}',to:'${esc(creditors[0].name)}'});_renderSettlements()">+ Force a payment</button>`;
+  }
+  html += '</div>';
+
+  document.getElementById('settlements').innerHTML = html;
+}
+
 function renderLedger(data) {
-  const { players, settlements } = data;
+  _ledgerData = data;
+  _forcedPairs = [];
+  const { players } = data;
   const totalPot = players.reduce((s, p) => s + p.buyin, 0);
 
   document.getElementById('gameInfo').innerHTML = `
     <div class="stat"><span class="stat-label">Players</span><span class="stat-value">${players.length}</span></div>
     <div class="stat"><span class="stat-label">Total Buy-ins</span><span class="stat-value">$${totalPot.toFixed(2)}</span></div>
-    <div class="stat"><span class="stat-label">Settlements</span><span class="stat-value">${settlements.length}</span></div>
   `;
 
   document.getElementById('ledgerBody').innerHTML = players.map(p => `
@@ -1261,17 +1418,7 @@ function renderLedger(data) {
     </tr>
   `).join('');
 
-  document.getElementById('settlements').innerHTML = settlements.length === 0
-    ? '<p style="color:#64748b">No settlements needed.</p>'
-    : settlements.map(s => `
-      <div class="settlement">
-        <span class="from">${esc(s.from)}</span>
-        <span class="arrow">&#x2192;</span>
-        <span class="amount">$${s.amount.toFixed(2)}</span>
-        <span class="arrow">&#x2192;</span>
-        <span class="to">${esc(s.to)}</span>
-      </div>
-    `).join('');
+  _renderSettlements();
 }
 
 async function analyze() {
@@ -1286,7 +1433,7 @@ async function analyze() {
 
   const btn = document.getElementById('analyzeBtn');
   btn.disabled = true;
-  showStatus('Fetching ledger...');
+  showStatus('Fetching ledger...', false, true);
 
   // 1) Fetch ledger (money-only logs — fast)
   try {
