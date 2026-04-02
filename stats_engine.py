@@ -1244,6 +1244,57 @@ def _expected_payout(hand, lock_idx, mc_trials):
     return exp_by_name, info
 
 
+# ── Biggest pots ────────────────────────────────────────────────────────
+
+def compute_biggest_pots(hands, top_n=20):
+    """Return the top N biggest pots with full details.
+
+    Returns list of {potSize, handNumber, gameType, bombPot, players: [{name, cards, delta}],
+                     board1, board2}
+    """
+    amounts_in_cents = bool(hands and hands[0].get('cents', False))
+    scale = 0.01 if amounts_in_cents else 1.0
+
+    pots = []
+    for hand in hands:
+        deltas = _compute_deltas(hand)
+        # Pot size = sum of all money put in (negative deltas)
+        pot_size = sum(-d for d in deltas.values() if d < 0) * scale
+
+        hole_cards = _collect_hole_cards(hand)
+        board1, board2 = _board_up_to(hand, len(hand.get('events', [])) - 1)
+
+        players = []
+        for p in hand.get('players', []):
+            name = p['name']
+            d = round(deltas.get(name, 0.0) * scale, 2)
+            if abs(d) < 0.005:
+                continue  # skip players not involved
+            cards = hole_cards.get(p['seat']) or []
+            cards = [c for c in cards if c]
+            players.append({'name': name, 'cards': cards, 'delta': d})
+
+        # Sort players by delta descending (winners first)
+        players.sort(key=lambda x: -x['delta'])
+
+        entry = {
+            'potSize': round(pot_size, 2),
+            'handNumber': hand.get('number', ''),
+            'gameType': hand.get('gameType', ''),
+            'bombPot': bool(hand.get('bombPot')),
+            'players': players,
+        }
+        if board1:
+            entry['board1'] = board1
+        if board2:
+            entry['board2'] = board2
+
+        pots.append(entry)
+
+    pots.sort(key=lambda x: -x['potSize'])
+    return pots[:top_n]
+
+
 # ── Hand history (per-player) ────────────────────────────────────────────
 
 def compute_hand_history(hands):

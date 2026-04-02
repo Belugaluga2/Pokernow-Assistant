@@ -225,6 +225,8 @@
 
   /* EV section */
   .ev-table td, .ev-table th { font-size: 0.85rem; padding: 0.4rem 0.6rem; }
+  .ev-table th.sortable { cursor: pointer; user-select: none; }
+  .ev-table th.sortable:hover { color: #e2e8f0; }
 
   /* Player link */
   .player-link { color: #e2e8f0; text-decoration: none; border-bottom: 1px dashed #475569; cursor: pointer; }
@@ -263,6 +265,21 @@
   .hh-ev-eq { color:#60a5fa; font-weight:700; font-size:0.9rem; }
   .hh-ev-val { color:#94a3b8; }
   .hh-ev-diff { font-weight:600; font-size:0.85rem; }
+  .hh-sort-bar { display:flex; align-items:center; gap:6px; padding:6px 16px; border-bottom:1px solid #1e293b; }
+  .hh-sort-btn { background:none; border:1px solid #334155; color:#94a3b8; padding:2px 10px; border-radius:4px; font-size:0.75rem; cursor:pointer; }
+  .hh-sort-btn:hover { border-color:#60a5fa; color:#e2e8f0; }
+  .hh-sort-btn.active { border-color:#60a5fa; color:#60a5fa; }
+
+  /* Biggest pots */
+  .bp-entry { padding:10px 0; border-bottom:1px solid #1e293b; }
+  .bp-entry:last-child { border-bottom:none; }
+  .bp-header { display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+  .bp-rank { color:#f59e0b; font-weight:700; font-size:0.9rem; min-width:20px; }
+  .bp-pot { color:#22c55e; font-weight:700; font-size:1.05rem; }
+  .bp-player { display:flex; align-items:center; gap:8px; padding:2px 0 2px 30px; font-size:0.85rem; }
+  .bp-name { color:#cbd5e1; min-width:100px; }
+  .bp-cards { flex:1; }
+  .bp-delta { margin-left:auto; font-weight:600; }
   .hh-delta { margin-left: auto; font-weight: 700; font-family: 'SF Mono','Cascadia Code',monospace; font-size: 0.85rem; }
   .hh-cards { font-size: 0.82rem; color: #94a3b8; margin-top: 0.2rem; padding-left: 48px; }
   .hh-label { color: #475569; font-size: 0.72rem; margin-right: 0.3rem; }
@@ -371,6 +388,12 @@
         <div class="card" id="evCard" style="display:none">
           <h2>All-in EV Analysis</h2>
           <div id="evContent"></div>
+        </div>
+
+        <!-- Biggest Pots -->
+        <div class="card" id="bigPotsCard" style="display:none">
+          <h2>Biggest Pots</h2>
+          <div id="bigPotsContent"></div>
         </div>
       </div>
     </div>
@@ -519,11 +542,16 @@ function renderFullStats(data) {
 
   // EV analysis — show button instead of auto-computing
   renderEV(data.ev);
+
+  // Biggest pots
+  renderBiggestPots(data.biggestPots);
 }
 
 let _lastUploadedFile = null;  // store file text for on-demand EV
 let _lastEvTrials = 100000;
 let _evData = null;
+let _evSortCol = 'diff';
+let _evSortDir = 'desc';
 
 function switchStatTab(name, btn) {
   _currentStatTab = name;
@@ -710,20 +738,37 @@ function renderEV(ev) {
   // Get winnings data for net totals
   const wp = (_statsData && _statsData.winnings && _statsData.winnings.players) || {};
 
-  let html = '<h3 style="font-size:0.95rem;color:#cbd5e1;margin-bottom:0.75rem;">Per-Player All-in Summary</h3>';
-  html += '<table class="ev-table"><thead><tr><th>Player</th><th class="num"># All-ins</th><th class="num">Net Won</th><th class="num">EV-Adjusted</th><th class="num">All-in Diff</th></tr></thead><tbody>';
-
-  for (const [name, agg] of Object.entries(pp).sort((a, b) => b[1].diff - a[1].diff)) {
+  // Build sortable rows
+  const evIcon = k => _evSortCol !== k ? '' : _evSortDir === 'asc' ? ' \u25B2' : ' \u25BC';
+  const evEntries = Object.entries(pp).map(([name, agg]) => {
     const wArr = wp[name];
     const netWon = wArr ? wArr[wArr.length - 1] : null;
     const evAdj = netWon != null ? netWon - agg.diff : null;
-    const diffClass = agg.diff > 0.5 ? 'positive' : agg.diff < -0.5 ? 'negative' : 'neutral';
-    const netClass = netWon != null ? (netWon > 0.005 ? 'positive' : netWon < -0.005 ? 'negative' : 'neutral') : '';
-    const evAdjClass = evAdj != null ? (evAdj > 0.005 ? 'positive' : evAdj < -0.005 ? 'negative' : 'neutral') : '';
-    html += `<tr><td><a href="#" class="player-link" onclick="showEvChart(this.textContent); return false">${esc(name)}</a></td><td class="num">${agg.count}</td>`;
-    html += `<td class="num ${netClass}">${netWon != null ? (netWon > 0 ? '+' : '') + '$' + netWon.toFixed(2) : '—'}</td>`;
-    html += `<td class="num ${evAdjClass}">${evAdj != null ? (evAdj > 0 ? '+' : '') + '$' + evAdj.toFixed(2) : '—'}</td>`;
-    html += `<td class="num ${diffClass}">${agg.diff > 0 ? '+' : ''}$${agg.diff.toFixed(2)}</td></tr>`;
+    return { name, count: agg.count, netWon, evAdj, diff: agg.diff };
+  });
+  evEntries.sort((a, b) => {
+    const va = a[_evSortCol] ?? -Infinity;
+    const vb = b[_evSortCol] ?? -Infinity;
+    return _evSortDir === 'asc' ? va - vb : vb - va;
+  });
+
+  let html = '<h3 style="font-size:0.95rem;color:#cbd5e1;margin-bottom:0.75rem;">Per-Player All-in Summary</h3>';
+  html += `<table class="ev-table"><thead><tr>
+    <th>Player</th>
+    <th class="num sortable" onclick="evSort('count')"># All-ins${evIcon('count')}</th>
+    <th class="num sortable" onclick="evSort('netWon')">Net Won${evIcon('netWon')}</th>
+    <th class="num sortable" onclick="evSort('evAdj')">EV-Adjusted${evIcon('evAdj')}</th>
+    <th class="num sortable" onclick="evSort('diff')">All-in Diff${evIcon('diff')}</th>
+  </tr></thead><tbody>`;
+
+  for (const r of evEntries) {
+    const diffClass = r.diff > 0.5 ? 'positive' : r.diff < -0.5 ? 'negative' : 'neutral';
+    const netClass = r.netWon != null ? (r.netWon > 0.005 ? 'positive' : r.netWon < -0.005 ? 'negative' : 'neutral') : '';
+    const evAdjClass = r.evAdj != null ? (r.evAdj > 0.005 ? 'positive' : r.evAdj < -0.005 ? 'negative' : 'neutral') : '';
+    html += `<tr><td><a href="#" class="player-link" onclick="showEvChart(this.textContent); return false">${esc(r.name)}</a></td><td class="num">${r.count}</td>`;
+    html += `<td class="num ${netClass}">${r.netWon != null ? (r.netWon > 0 ? '+' : '') + '$' + r.netWon.toFixed(2) : '—'}</td>`;
+    html += `<td class="num ${evAdjClass}">${r.evAdj != null ? (r.evAdj > 0 ? '+' : '') + '$' + r.evAdj.toFixed(2) : '—'}</td>`;
+    html += `<td class="num ${diffClass}">${r.diff > 0 ? '+' : ''}$${r.diff.toFixed(2)}</td></tr>`;
   }
   html += '</tbody></table>';
 
@@ -746,6 +791,12 @@ function renderEV(ev) {
   </div>`;
 
   document.getElementById('evContent').innerHTML = html;
+}
+
+function evSort(col) {
+  if (_evSortCol === col) _evSortDir = _evSortDir === 'asc' ? 'desc' : 'asc';
+  else { _evSortCol = col; _evSortDir = 'desc'; }
+  if (_evData) renderEV(_evData);
 }
 
 async function computeEV() {
@@ -837,10 +888,18 @@ function _pc(card) {
 
 function _cards(arr) { return arr ? arr.map(_pc).join(' ') : ''; }
 
-function showHandHistory(playerName) {
+let _hhSortCol = 'hand';
+let _hhSortDir = 'asc';
+let _hhPlayer = null;
+
+function showHandHistory(playerName, sortCol, sortDir) {
   if (!_statsData || !_statsData.handHistory) return;
   const hands = _statsData.handHistory[playerName];
   if (!hands || !hands.length) return;
+
+  _hhPlayer = playerName;
+  if (sortCol) _hhSortCol = sortCol;
+  if (sortDir) _hhSortDir = sortDir;
 
   let total = 0;
   hands.forEach(h => total += h.delta);
@@ -861,8 +920,25 @@ function showHandHistory(playerName) {
     }
   }
 
+  // Sort hands
+  const sorted = [...hands];
+  sorted.sort((a, b) => {
+    let va, vb;
+    if (_hhSortCol === 'hand') { va = Number(a.hand); vb = Number(b.hand); }
+    else if (_hhSortCol === 'delta') { va = a.delta; vb = b.delta; }
+    else if (_hhSortCol === 'diff') {
+      const ea = evLookup[String(a.hand)];
+      const eb = evLookup[String(b.hand)];
+      va = ea ? ea.diff : -Infinity;
+      vb = eb ? eb.diff : -Infinity;
+    }
+    return _hhSortDir === 'asc' ? va - vb : vb - va;
+  });
+
+  const hhIcon = k => _hhSortCol !== k ? '' : _hhSortDir === 'asc' ? ' \u25B2' : ' \u25BC';
+
   let body = '';
-  for (const h of hands) {
+  for (const h of sorted) {
     const dc = h.delta > 0.005 ? 'positive' : h.delta < -0.005 ? 'negative' : 'neutral';
     const ds = (h.delta > 0 ? '+' : '') + '$' + h.delta.toFixed(2);
     const gt = _GT_LABELS[h.gt] || h.gt || '';
@@ -895,12 +971,22 @@ function showHandHistory(playerName) {
     body += '</div>';
   }
 
+  // Remove existing overlay if re-sorting
+  const old = document.querySelector('.hh-overlay');
+  if (old) old.remove();
+
   const overlay = document.createElement('div');
   overlay.className = 'hh-overlay';
   overlay.innerHTML = `<div class="hh-panel">
     <div class="hh-header">
       <div><h2>${esc(playerName)}</h2><div class="hh-sub">${hands.length} hands &middot; Net: <span class="${totalClass}">${totalStr}</span></div></div>
       <button class="hh-close" onclick="this.closest('.hh-overlay').remove()">&times;</button>
+    </div>
+    <div class="hh-sort-bar">
+      <span style="color:#64748b;font-size:0.75rem;">Sort:</span>
+      <button class="hh-sort-btn${_hhSortCol === 'hand' ? ' active' : ''}" onclick="hhSort('hand')">Hand #${hhIcon('hand')}</button>
+      <button class="hh-sort-btn${_hhSortCol === 'delta' ? ' active' : ''}" onclick="hhSort('delta')">Won/Lost${hhIcon('delta')}</button>
+      <button class="hh-sort-btn${_hhSortCol === 'diff' ? ' active' : ''}" onclick="hhSort('diff')">EV Diff${hhIcon('diff')}</button>
     </div>
     <div class="hh-body">${body}</div>
   </div>`;
@@ -909,6 +995,12 @@ function showHandHistory(playerName) {
 
   const handler = e => { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', handler); } };
   document.addEventListener('keydown', handler);
+}
+
+function hhSort(col) {
+  if (_hhSortCol === col) _hhSortDir = _hhSortDir === 'asc' ? 'desc' : 'asc';
+  else { _hhSortCol = col; _hhSortDir = col === 'hand' ? 'asc' : 'desc'; }
+  if (_hhPlayer) showHandHistory(_hhPlayer);
 }
 
 // ===== EV CHART MODAL =====
@@ -1027,6 +1119,81 @@ function showEvChart(playerName) {
       },
     },
   });
+}
+
+// ===== BIGGEST POTS =====
+let _bigPotsData = null;
+let _bpSortCol = 'potSize';
+let _bpSortDir = 'desc';
+
+function renderBiggestPots(pots) {
+  const card = document.getElementById('bigPotsCard');
+  if (!pots || !pots.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  _bigPotsData = pots;
+  _renderBigPotsBody();
+}
+
+function _renderBigPotsBody() {
+  const pots = [..._bigPotsData];
+  pots.sort((a, b) => {
+    let va, vb;
+    if (_bpSortCol === 'potSize') { va = a.potSize; vb = b.potSize; }
+    else if (_bpSortCol === 'hand') { va = Number(a.handNumber); vb = Number(b.handNumber); }
+    return _bpSortDir === 'asc' ? va - vb : vb - va;
+  });
+
+  const bpIcon = k => _bpSortCol !== k ? '' : _bpSortDir === 'asc' ? ' \u25B2' : ' \u25BC';
+
+  let html = `<div class="hh-sort-bar" style="padding:0 0 8px 0;border:none;">
+    <span style="color:#64748b;font-size:0.75rem;">Sort:</span>
+    <button class="hh-sort-btn${_bpSortCol === 'potSize' ? ' active' : ''}" onclick="bpSort('potSize')">Pot Size${bpIcon('potSize')}</button>
+    <button class="hh-sort-btn${_bpSortCol === 'hand' ? ' active' : ''}" onclick="bpSort('hand')">Hand #${bpIcon('hand')}</button>
+  </div>`;
+
+  for (let i = 0; i < pots.length; i++) {
+    const p = pots[i];
+    const gt = _GT_LABELS[p.gameType] || p.gameType || '';
+    const tag = (p.bombPot ? 'BP ' : '') + gt;
+    const rank = _bpSortCol === 'potSize' ? `<span class="bp-rank">${_bpSortDir === 'desc' ? i + 1 : pots.length - i}</span>` : '';
+
+    html += `<div class="bp-entry">`;
+    html += `<div class="bp-header">`;
+    html += rank;
+    html += `<span class="bp-pot">$${p.potSize.toFixed(2)}</span>`;
+    html += `<span class="hh-num">#${esc(String(p.handNumber))}</span>`;
+    if (tag) html += `<span class="hh-type">${tag}</span>`;
+    html += `</div>`;
+
+    // Board
+    if (p.board1 && p.board1.length) {
+      const lbl = p.board2 ? 'Board 1:' : 'Board:';
+      html += `<div class="hh-cards"><span class="hh-label">${lbl}</span> ${_cards(p.board1)}</div>`;
+    }
+    if (p.board2 && p.board2.length) {
+      html += `<div class="hh-cards"><span class="hh-label">Board 2:</span> ${_cards(p.board2)}</div>`;
+    }
+
+    // Players
+    for (const pl of p.players) {
+      const dc = pl.delta > 0.005 ? 'positive' : pl.delta < -0.005 ? 'negative' : 'neutral';
+      const ds = (pl.delta > 0 ? '+' : '') + '$' + pl.delta.toFixed(2);
+      html += `<div class="bp-player">`;
+      html += `<span class="bp-name">${esc(pl.name)}</span>`;
+      if (pl.cards && pl.cards.length) html += `<span class="bp-cards">${_cards(pl.cards)}</span>`;
+      html += `<span class="bp-delta ${dc}">${ds}</span>`;
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+
+  document.getElementById('bigPotsContent').innerHTML = html;
+}
+
+function bpSort(col) {
+  if (_bpSortCol === col) _bpSortDir = _bpSortDir === 'asc' ? 'desc' : 'asc';
+  else { _bpSortCol = col; _bpSortDir = col === 'hand' ? 'asc' : 'desc'; }
+  _renderBigPotsBody();
 }
 
 // ===== LEDGER =====

@@ -24,7 +24,7 @@ import os
 from csv_parser import parse_hand_data
 from stats_engine import (
     compute_all_stats, compute_winnings, compute_allin_ev,
-    compute_equity, compute_hand_history, has_eval7,
+    compute_equity, compute_hand_history, compute_biggest_pots, has_eval7,
 )
 
 PORT = int(os.environ.get('PORT', 8000))
@@ -355,6 +355,7 @@ def _compute_stats_from_hands(hands):
     result = compute_all_stats(hands)
     result['winnings'] = compute_winnings(hands)
     result['handHistory'] = compute_hand_history(hands)
+    result['biggestPots'] = compute_biggest_pots(hands)
     result['ev'] = {'available': has_eval7(), 'computed': False}
     return result
 
@@ -454,6 +455,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 result = compute_all_stats(hands)
                 result['winnings'] = compute_winnings(hands)
                 result['handHistory'] = compute_hand_history(hands)
+                result['biggestPots'] = compute_biggest_pots(hands)
                 result['ev'] = {'available': has_eval7(), 'computed': False}
                 result['format'] = fmt
                 self._json_response(200, result)
