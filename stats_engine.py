@@ -132,7 +132,7 @@ def _new_player_stats(name, pid):
         # Bomb pot
         'bp_hands': 0, 'bp_vpip_n': 0,
         # Double board bomb pot outcomes
-        'bp_db_showdowns': 0, 'bp_scoop_n': 0, 'bp_chop_n': 0, 'bp_quartered_n': 0,
+        'bp_db_showdowns': 0, 'bp_scoop_n': 0, 'bp_threequarter_n': 0, 'bp_chop_n': 0, 'bp_quartered_n': 0,
     }
 
 
@@ -225,6 +225,7 @@ def compute_all_stats(hands):
             'bpVpip': _pct(s['bp_vpip_n'], s['bp_hands']),
             'bpDbShowdowns': s['bp_db_showdowns'],
             'bpScoop': _pct(s['bp_scoop_n'], s['bp_db_showdowns']),
+            'bpThreequarter': _pct(s['bp_threequarter_n'], s['bp_db_showdowns']),
             'bpChop': _pct(s['bp_chop_n'], s['bp_db_showdowns']),
             'bpQuartered': _pct(s['bp_quartered_n'], s['bp_db_showdowns']),
             'samples': {
@@ -248,6 +249,7 @@ def compute_all_stats(hands):
                 'afq': _sample(s['postflop_br'], s['postflop_total']),
                 'bpVpip': _sample(s['bp_vpip_n'], s['bp_hands']),
                 'bpScoop': _sample(s['bp_scoop_n'], s['bp_db_showdowns']),
+                'bpThreequarter': _sample(s['bp_threequarter_n'], s['bp_db_showdowns']),
                 'bpChop': _sample(s['bp_chop_n'], s['bp_db_showdowns']),
                 'bpQuartered': _sample(s['bp_quartered_n'], s['bp_db_showdowns']),
             },
@@ -641,43 +643,70 @@ def _evaluate_hand_for_board(hole_cards, board, is_omaha):
     return _best5of7(hole_cards + board)
 
 
-def _track_double_board_outcome(hand, survivors, seat_to_name, seat_to_id, players):
-    """Track scoop/chop/quartered for double board hands at showdown."""
+def _double_board_outcomes(hand, survivor_seats=None):
+    """Return {seat: 'scoop'|'chop'|'threequarter'|'quarter'} for a double board hand.
+
+    If survivor_seats is None, determines survivors by scanning for folds.
+    Returns empty dict if hand isn't a completed double board or lacks hole cards.
+    """
     board1, board2 = _board_up_to(hand, len(hand.get('events', [])) - 1)
     if not board2 or len(board1) < 5 or len(board2) < 5:
-        return
-    if len(survivors) < 2:
-        return
+        return {}
+
+    if survivor_seats is None:
+        all_seats = {p['seat'] for p in hand.get('players', [])}
+        folded = set()
+        for ev in hand.get('events', []):
+            if ev.get('payload', {}).get('type') == FOLD:
+                folded.add(ev['payload'].get('seat'))
+        survivor_seats = all_seats - folded
+
+    if len(survivor_seats) < 2:
+        return {}
 
     known_hole = _collect_hole_cards(hand)
-    survivor_seats = [s for s in survivors if s in known_hole and len(known_hole[s]) >= 2]
-    if len(survivor_seats) < 2:
-        return
+    eval_seats = [s for s in survivor_seats if s in known_hole and len(known_hole[s]) >= 2]
+    if len(eval_seats) < 2:
+        return {}
 
     is_omaha = _is_omaha(hand.get('gameType', ''))
-    scores1 = {s: _evaluate_hand_for_board(known_hole[s], board1, is_omaha) for s in survivor_seats}
-    scores2 = {s: _evaluate_hand_for_board(known_hole[s], board2, is_omaha) for s in survivor_seats}
+    scores1 = {s: _evaluate_hand_for_board(known_hole[s], board1, is_omaha) for s in eval_seats}
+    scores2 = {s: _evaluate_hand_for_board(known_hole[s], board2, is_omaha) for s in eval_seats}
 
     best1 = max(scores1.values())
     best2 = max(scores2.values())
     winners1 = {s for s, sc in scores1.items() if sc == best1}
     winners2 = {s for s, sc in scores2.items() if sc == best2}
 
-    for seat in survivor_seats:
+    outcomes = {}
+    for seat in eval_seats:
+        won_b1 = seat in winners1
+        won_b2 = seat in winners2
+        if won_b1 and won_b2:
+            sole_both = len(winners1) == 1 and len(winners2) == 1
+            outcomes[seat] = 'scoop' if sole_both else 'threequarter'
+        elif won_b1 or won_b2:
+            shared = (won_b1 and len(winners1) > 1) or (won_b2 and len(winners2) > 1)
+            outcomes[seat] = 'quarter' if shared else 'chop'
+    return outcomes
+
+
+def _track_double_board_outcome(hand, survivors, seat_to_name, seat_to_id, players):
+    """Track scoop/chop/quartered for double board hands at showdown."""
+    outcomes = _double_board_outcomes(hand, survivors)
+    for seat, outcome in outcomes.items():
         pid = seat_to_id.get(seat)
         if not pid:
             continue
         players[pid]['bp_db_showdowns'] += 1
-        won_b1 = seat in winners1
-        won_b2 = seat in winners2
-        if won_b1 and won_b2:
+        if outcome == 'scoop':
             players[pid]['bp_scoop_n'] += 1
-        elif won_b1 or won_b2:
-            shared = (won_b1 and len(winners1) > 1) or (won_b2 and len(winners2) > 1)
-            if shared:
-                players[pid]['bp_quartered_n'] += 1
-            else:
-                players[pid]['bp_chop_n'] += 1
+        elif outcome == 'threequarter':
+            players[pid]['bp_threequarter_n'] += 1
+        elif outcome == 'quarter':
+            players[pid]['bp_quartered_n'] += 1
+        else:
+            players[pid]['bp_chop_n'] += 1
 
 
 # ── Winnings computation ─────────────────────────────────────────────────
@@ -813,7 +842,9 @@ def compute_allin_ev(hands, mc_trials=100000, progress_callback=None):
     scale = 0.01 if amounts_in_cents else 1.0
 
     rows = []
-    per_player = defaultdict(lambda: {'count': 0, 'actual': 0.0, 'ev': 0.0, 'diff': 0.0})
+    per_player = defaultdict(lambda: {'count': 0, 'actual': 0.0, 'ev': 0.0, 'diff': 0.0,
+                                      'eq_sum': 0.0, 'pot_sum': 0.0,
+                                      'payout_sum': 0.0})
     skip_reasons = defaultdict(int)
 
     # Pre-scan for all-in hands
@@ -928,6 +959,10 @@ def compute_allin_ev(hands, mc_trials=100000, progress_callback=None):
             per_player[n]['actual'] += a_net
             per_player[n]['ev'] += e_net
             per_player[n]['diff'] += diff
+            pot = ev_total * scale
+            per_player[n]['eq_sum'] += eq * pot
+            per_player[n]['pot_sum'] += pot
+            per_player[n]['payout_sum'] += a_payout
 
         # Determine street of all-in
         b1_len = len(board1_at_lock)
@@ -946,11 +981,15 @@ def compute_allin_ev(hands, mc_trials=100000, progress_callback=None):
     # Round final per-player totals
     pp = {}
     for name, agg in per_player.items():
+        avg_eq = round(agg['eq_sum'] / agg['pot_sum'] * 100, 1) if agg['pot_sum'] > 0 else 0.0
+        win_pct = round(agg['payout_sum'] / agg['pot_sum'] * 100, 1) if agg['pot_sum'] > 0 else 0.0
         pp[name] = {
             'count': agg['count'],
             'actual': round(agg['actual'], 2),
             'ev': round(agg['ev'], 2),
             'diff': round(agg['diff'], 2),
+            'avgEquity': avg_eq,
+            'winPct': win_pct,
         }
 
     return {
@@ -1286,6 +1325,7 @@ def compute_hand_history(hands):
         deltas = _compute_deltas(hand)
         hole_cards = _collect_hole_cards(hand)
         board1, board2 = _board_up_to(hand, len(hand.get('events', [])) - 1)
+        db_outcomes = _double_board_outcomes(hand) if board2 else {}
 
         for p in hand.get('players', []):
             name = p['name']
@@ -1305,6 +1345,9 @@ def compute_hand_history(hands):
             gt = hand.get('gameType', '')
             if gt:
                 entry['gt'] = gt
+            outcome = db_outcomes.get(p['seat'])
+            if outcome:
+                entry['dbOutcome'] = outcome
 
             history[name].append(entry)
 
