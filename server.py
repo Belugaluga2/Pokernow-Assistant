@@ -24,7 +24,7 @@ import os
 from csv_parser import parse_hand_data
 from stats_engine import (
     compute_all_stats, compute_winnings, compute_allin_ev,
-    compute_equity, has_eval7,
+    compute_equity, compute_hand_history, has_eval7,
 )
 
 PORT = int(os.environ.get('PORT', 8000))
@@ -354,6 +354,7 @@ def _compute_stats_from_hands(hands):
     """Compute all stats from parsed hand list (without EV — that's on-demand)."""
     result = compute_all_stats(hands)
     result['winnings'] = compute_winnings(hands)
+    result['handHistory'] = compute_hand_history(hands)
     result['ev'] = {'available': has_eval7(), 'computed': False}
     return result
 
@@ -452,6 +453,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
                 result = compute_all_stats(hands)
                 result['winnings'] = compute_winnings(hands)
+                result['handHistory'] = compute_hand_history(hands)
                 result['ev'] = {'available': has_eval7(), 'computed': False}
                 result['format'] = fmt
                 self._json_response(200, result)
@@ -460,14 +462,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self._json_response(400, {'error': str(e)})
             return
 
-        # POST /api/stats/ev — on-demand all-in EV computation
-        if self.path == '/api/stats/ev':
+        # POST /api/stats/ev — on-demand all-in EV computation (SSE streaming)
+        ev_path = self.path.split('?')[0]
+        if ev_path == '/api/stats/ev':
+            # Parse trials from query string
+            qs = self.path.split('?', 1)[1] if '?' in self.path else ''
+            params = dict(p.split('=', 1) for p in qs.split('&') if '=' in p) if qs else {}
+            mc_trials = max(500, min(int(params.get('trials', 33000)), 100000))
+
             try:
                 length = int(self.headers.get('Content-Length', 0))
                 body = self.rfile.read(length).decode('utf-8', errors='replace')
 
                 hands, fmt = parse_hand_data(body)
-                print(f'  Computing EV for {len(hands)} hands from {fmt} upload...')
+                print(f'  Computing EV for {len(hands)} hands from {fmt} upload (trials={mc_trials})...')
 
                 if not hands:
                     self._json_response(400, {'error': 'No hands found'})
@@ -476,13 +484,40 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 if not has_eval7():
                     self._json_response(400, {'error': 'eval7 not available on server'})
                     return
+            except Exception as e:
+                print(f'  ERROR parsing for EV: {e}')
+                self._json_response(400, {'error': str(e)})
+                return
 
-                ev = compute_allin_ev(hands)
-                self._json_response(200, ev)
+            # Stream progress via SSE
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/event-stream')
+            self.send_header('Cache-Control', 'no-cache')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+
+            try:
+                def on_progress(current, total):
+                    try:
+                        msg = json.dumps({'progress': current, 'total': total})
+                        self.wfile.write(f'data: {msg}\n\n'.encode())
+                        self.wfile.flush()
+                    except (BrokenPipeError, ConnectionResetError):
+                        pass
+
+                ev = compute_allin_ev(hands, mc_trials=mc_trials, progress_callback=on_progress)
+                final = json.dumps({'done': True, **ev})
+                self.wfile.write(f'data: {final}\n\n'.encode())
+                self.wfile.flush()
             except Exception as e:
                 print(f'  ERROR computing EV: {e}')
                 import traceback; traceback.print_exc()
-                self._json_response(400, {'error': str(e)})
+                try:
+                    err = json.dumps({'error': str(e)})
+                    self.wfile.write(f'data: {err}\n\n'.encode())
+                    self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
             return
 
         # POST /api/equity — equity calculator

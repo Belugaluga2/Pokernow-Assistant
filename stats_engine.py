@@ -131,6 +131,8 @@ def _new_player_stats(name, pid):
         'postflop_total': 0,
         # Bomb pot
         'bp_hands': 0, 'bp_vpip_n': 0,
+        # Double board bomb pot outcomes
+        'bp_db_showdowns': 0, 'bp_scoop_n': 0, 'bp_chop_n': 0, 'bp_quartered_n': 0,
     }
 
 
@@ -221,6 +223,10 @@ def compute_all_stats(hands):
             'afq': _pct(s['postflop_br'], s['postflop_total']),
             'bpHandsPlayed': s['bp_hands'],
             'bpVpip': _pct(s['bp_vpip_n'], s['bp_hands']),
+            'bpDbShowdowns': s['bp_db_showdowns'],
+            'bpScoop': _pct(s['bp_scoop_n'], s['bp_db_showdowns']),
+            'bpChop': _pct(s['bp_chop_n'], s['bp_db_showdowns']),
+            'bpQuartered': _pct(s['bp_quartered_n'], s['bp_db_showdowns']),
             'samples': {
                 'vpip': _sample(s['vpip_n'], s['vpip_d']),
                 'pfr': _sample(s['pfr_n'], s['pfr_d']),
@@ -240,6 +246,10 @@ def compute_all_stats(hands):
                 'donkBet': _sample(s['donk_n'], s['donk_d']),
                 'af': f"{s['postflop_br']}/{s['postflop_calls']}",
                 'afq': _sample(s['postflop_br'], s['postflop_total']),
+                'bpVpip': _sample(s['bp_vpip_n'], s['bp_hands']),
+                'bpScoop': _sample(s['bp_scoop_n'], s['bp_db_showdowns']),
+                'bpChop': _sample(s['bp_chop_n'], s['bp_db_showdowns']),
+                'bpQuartered': _sample(s['bp_quartered_n'], s['bp_db_showdowns']),
             },
         })
 
@@ -580,13 +590,15 @@ def _process_standard_hand(hand, events, seat_to_name, seat_to_id, players, posi
 
 
 def _process_bomb_pot_hand(hand, events, seat_to_name, seat_to_id, players, positions):
-    """Process a bomb pot hand — only tracks BP hands and BP VPIP (postflop action)."""
+    """Process a bomb pot hand — tracks BP hands, BP VPIP, and double board outcomes."""
     all_seats = set(seat_to_name.keys())
     for seat in all_seats:
         players[seat_to_id[seat]]['bp_hands'] += 1
 
     postflop = False
-    bp_vpip_counted = set()  # seats already counted for BP VPIP this hand
+    bp_vpip_counted = set()
+    seats_in_hand = set(all_seats)
+
     for ev in events:
         pl = ev.get('payload', {})
         t = pl.get('type')
@@ -596,12 +608,76 @@ def _process_bomb_pot_hand(hand, events, seat_to_name, seat_to_id, players, posi
             postflop = True
             continue
 
+        if t == FOLD and seat in seats_in_hand:
+            seats_in_hand.discard(seat)
+
         if postflop and t in (CALL, BET_RAISE) and seat is not None:
             if seat not in bp_vpip_counted:
                 pid = seat_to_id.get(seat)
                 if pid:
                     players[pid]['bp_vpip_n'] += 1
                     bp_vpip_counted.add(seat)
+
+    # Track double board outcomes (scoop/chop/quartered)
+    _track_double_board_outcome(hand, seats_in_hand, seat_to_name, seat_to_id, players)
+
+
+def _evaluate_hand_for_board(hole_cards, board, is_omaha):
+    """Evaluate a player's best hand on a specific board. Returns comparable score."""
+    if _HAVE_EVAL7:
+        e7_hole = [eval7.Card(c) for c in hole_cards]
+        e7_board = [eval7.Card(c) for c in board]
+        if is_omaha:
+            return _best_omaha_hand(e7_hole, e7_board)
+        return eval7.evaluate(e7_hole + e7_board)
+    if is_omaha:
+        best = None
+        for h2 in itertools.combinations(hole_cards, 2):
+            for b3 in itertools.combinations(board, 3):
+                s = _eval5(list(h2) + list(b3))
+                if best is None or s > best:
+                    best = s
+        return best
+    return _best5of7(hole_cards + board)
+
+
+def _track_double_board_outcome(hand, survivors, seat_to_name, seat_to_id, players):
+    """Track scoop/chop/quartered for double board hands at showdown."""
+    board1, board2 = _board_up_to(hand, len(hand.get('events', [])) - 1)
+    if not board2 or len(board1) < 5 or len(board2) < 5:
+        return
+    if len(survivors) < 2:
+        return
+
+    known_hole = _collect_hole_cards(hand)
+    survivor_seats = [s for s in survivors if s in known_hole and len(known_hole[s]) >= 2]
+    if len(survivor_seats) < 2:
+        return
+
+    is_omaha = _is_omaha(hand.get('gameType', ''))
+    scores1 = {s: _evaluate_hand_for_board(known_hole[s], board1, is_omaha) for s in survivor_seats}
+    scores2 = {s: _evaluate_hand_for_board(known_hole[s], board2, is_omaha) for s in survivor_seats}
+
+    best1 = max(scores1.values())
+    best2 = max(scores2.values())
+    winners1 = {s for s, sc in scores1.items() if sc == best1}
+    winners2 = {s for s, sc in scores2.items() if sc == best2}
+
+    for seat in survivor_seats:
+        pid = seat_to_id.get(seat)
+        if not pid:
+            continue
+        players[pid]['bp_db_showdowns'] += 1
+        won_b1 = seat in winners1
+        won_b2 = seat in winners2
+        if won_b1 and won_b2:
+            players[pid]['bp_scoop_n'] += 1
+        elif won_b1 or won_b2:
+            shared = (won_b1 and len(winners1) > 1) or (won_b2 and len(winners2) > 1)
+            if shared:
+                players[pid]['bp_quartered_n'] += 1
+            else:
+                players[pid]['bp_chop_n'] += 1
 
 
 # ── Winnings computation ─────────────────────────────────────────────────
@@ -710,7 +786,7 @@ def has_eval7():
     return _HAVE_EVAL7
 
 
-def compute_allin_ev(hands, mc_trials=33000):
+def compute_allin_ev(hands, mc_trials=100000, progress_callback=None):
     """Compute all-in EV for each hand where all-in occurs.
 
     For each all-in hand, computes:
@@ -738,36 +814,91 @@ def compute_allin_ev(hands, mc_trials=33000):
 
     rows = []
     per_player = defaultdict(lambda: {'count': 0, 'actual': 0.0, 'ev': 0.0, 'diff': 0.0})
+    skip_reasons = defaultdict(int)
 
+    # Pre-scan for all-in hands
+    allin_hands = []
     for hand in hands:
         lock_idx = _find_allin_lock(hand)
+        if lock_idx is not None:
+            allin_hands.append((hand, lock_idx))
+
+    total_allin = len(allin_hands)
+    if progress_callback:
+        progress_callback(0, total_allin)
+
+    for idx, (hand, lock_idx) in enumerate(allin_hands):
+        # Skip river all-ins — no cards left to simulate, EV = actual
+        board1_at_lock, _ = _board_up_to(hand, lock_idx)
+        if len(board1_at_lock) >= 5:
+            skip_reasons['river all-in (EV = actual)'] += 1
+            if progress_callback:
+                progress_callback(idx + 1, total_allin)
+            continue
+
         if _is_omaha(hand.get('gameType', '')):
-            trials = 1300 if '5' in str(hand.get('gameType', '')) else 3300
+            trials = int(mc_trials * 0.04) if '5' in str(hand.get('gameType', '')) else int(mc_trials * 0.1)
         else:
             trials = mc_trials
-        if lock_idx is None:
-            continue
 
         exp, info = _expected_payout(hand, lock_idx, trials)
         if exp is None:
+            reason = str(info) if info else 'unknown'
+            if 'few survivor' in reason.lower():
+                skip_reasons['no contest (everyone folded)'] += 1
+            elif 'missing' in reason.lower():
+                skip_reasons['missing hole cards'] += 1
+            else:
+                skip_reasons[reason] += 1
+            if progress_callback:
+                progress_callback(idx + 1, total_allin)
             continue
 
         seat_to_name = {p['seat']: p['name'] for p in hand.get('players', [])}
         names = info['names']
 
-        # Get actual payouts from ALL payout events in the hand (not from a partial index)
+        # Identify which seats actually went all-in.
+        # If ALLIN_APPROVAL exists, all survivors are all-in.
+        has_approval = any(
+            e.get('payload', {}).get('type') == ALLIN_APPROVAL
+            for e in hand.get('events', [])
+        )
+        if has_approval:
+            allin_names = set(names)
+        else:
+            allin_seats = set()
+            for e in hand.get('events', []):
+                pl = e.get('payload', {})
+                if pl.get('type') in (CALL, BET_RAISE) and pl.get('allIn'):
+                    allin_seats.add(pl.get('seat'))
+            allin_names = {seat_to_name.get(s) for s in allin_seats}
+
+        # Decide who to report EV for:
+        # - If ≤1 non-all-in survivor → equity locked for everyone → report all
+        # - If 2+ non-all-in survivors and 2+ all-in → report only all-in players
+        # - If 2+ non-all-in survivors and 1 all-in → skip (not a real lock)
+        non_allin = [n for n in names if n not in allin_names]
+        if len(non_allin) >= 2:
+            if len(allin_names) < 2:
+                skip_reasons['single all-in with multiple callers'] += 1
+                if progress_callback:
+                    progress_callback(idx + 1, total_allin)
+                continue
+            report_names = allin_names
+        else:
+            # ≤1 non-all-in survivor: everyone's equity is locked
+            report_names = set(names)
+
         actual_by_seat = defaultdict(float)
-        for ev in hand.get('events', []):
-            pl = ev.get('payload', {})
+        for e in hand.get('events', []):
+            pl = e.get('payload', {})
             if pl.get('type') == PAYOUT and pl.get('value'):
                 actual_by_seat[pl.get('seat')] += float(pl['value'])
         actual = defaultdict(float)
         for s, v in actual_by_seat.items():
             actual[seat_to_name.get(s, str(s))] += v
 
-        # Get committed amounts for each survivor
-        committed_by_name = info['locked']  # locked = committed per survivor
-
+        committed_by_name = info['locked']
         ev_total = sum(exp.get(n, 0.0) for n in names)
 
         players_detail = []
@@ -779,7 +910,11 @@ def compute_allin_ev(hands, mc_trials=33000):
 
             a_net = a_payout - invested
             e_net = e_payout - invested
-            diff = a_net - e_net  # same as a_payout - e_payout
+            diff = a_net - e_net
+
+            # Only report EV for players whose equity is locked
+            if n not in report_names:
+                continue
 
             players_detail.append({
                 'name': n,
@@ -794,11 +929,19 @@ def compute_allin_ev(hands, mc_trials=33000):
             per_player[n]['ev'] += e_net
             per_player[n]['diff'] += diff
 
+        # Determine street of all-in
+        b1_len = len(board1_at_lock)
+        allin_street = {0: 'preflop', 3: 'flop', 4: 'turn'}.get(b1_len, 'flop')
+
         rows.append({
             'handNumber': hand.get('number'),
             'board': info['board'],
             'players': players_detail,
+            'street': allin_street,
         })
+
+        if progress_callback:
+            progress_callback(idx + 1, total_allin)
 
     # Round final per-player totals
     pp = {}
@@ -810,11 +953,19 @@ def compute_allin_ev(hands, mc_trials=33000):
             'diff': round(agg['diff'], 2),
         }
 
-    return {'available': True, 'perPlayer': pp, 'evRows': rows}
+    return {
+        'available': True, 'perPlayer': pp, 'evRows': rows,
+        'totalAllin': total_allin, 'totalAnalyzed': len(rows),
+        'skipReasons': dict(skip_reasons),
+    }
 
 
 def _find_allin_lock(hand):
-    """Find the all-in lock point (type 14 approval or last allIn bet with no further betting)."""
+    """Find the all-in lock point (type 14 approval or last allIn bet/call).
+
+    Returns lock index if at least one player is all-in, or None.
+    Caller decides whether to analyze based on survivor structure.
+    """
     events = hand.get('events', [])
     last_approve = None
     for i, ev in enumerate(events):
@@ -828,14 +979,6 @@ def _find_allin_lock(hand):
         pl = ev.get('payload', {})
         if pl.get('type') in (CALL, BET_RAISE) and pl.get('allIn'):
             last_allin = i
-    if last_allin is None:
-        return None
-
-    forbidden = {ANTE, BIG_BLIND, SMALL_BLIND, POSTED_BB, POSTED_SB_DEAD, CALL, BET_RAISE}
-    for j in range(last_allin + 1, len(events)):
-        t = events[j].get('payload', {}).get('type')
-        if t in forbidden:
-            return None
     return last_allin
 
 
@@ -896,7 +1039,7 @@ def _board_up_to(hand, idx):
             break
         pl = ev.get('payload', {})
         if pl.get('type') == COMMUNITY and pl.get('cards'):
-            board_num = pl.get('board', 1)
+            board_num = pl.get('board') or pl.get('run', 1)
             if board_num == 2:
                 board2.extend(pl['cards'])
             else:
@@ -1101,6 +1244,44 @@ def _expected_payout(hand, lock_idx, mc_trials):
     return exp_by_name, info
 
 
+# ── Hand history (per-player) ────────────────────────────────────────────
+
+def compute_hand_history(hands):
+    """Return per-player hand-by-hand data: hole cards, delta, boards, game type."""
+    amounts_in_cents = bool(hands and hands[0].get('cents', False))
+    scale = 0.01 if amounts_in_cents else 1.0
+
+    history = defaultdict(list)
+
+    for hand in hands:
+        deltas = _compute_deltas(hand)
+        hole_cards = _collect_hole_cards(hand)
+        board1, board2 = _board_up_to(hand, len(hand.get('events', [])) - 1)
+
+        for p in hand.get('players', []):
+            name = p['name']
+            cards = hole_cards.get(p['seat']) or []
+            cards = [c for c in cards if c]
+            delta = round(deltas.get(name, 0.0) * scale, 2)
+
+            entry = {'hand': hand.get('number', ''), 'delta': delta}
+            if cards:
+                entry['cards'] = cards
+            if board1:
+                entry['board1'] = board1
+            if board2:
+                entry['board2'] = board2
+            if hand.get('bombPot'):
+                entry['bp'] = True
+            gt = hand.get('gameType', '')
+            if gt:
+                entry['gt'] = gt
+
+            history[name].append(entry)
+
+    return dict(history)
+
+
 # ── Equity calculator ────────────────────────────────────────────────────
 
 RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A']
@@ -1175,55 +1356,189 @@ def _best5of7(seven_cards):
 
 
 def compute_equity(player_hands, board=None, trials=100000):
-    """Monte Carlo equity calculator.
+    """Monte Carlo equity calculator. Supports Hold'em, PLO4, PLO5.
+
+    Uses eval7 (C extension) when available for ~30-100x speedup.
+    Auto-scales trial count for Omaha to keep runtime reasonable.
 
     Args:
-        player_hands: list of [card1, card2] per player, e.g. [["As","Kd"], ["Th","Td"]]
-        board: optional list of community cards (0-5), e.g. ["Jh","7c","2s"]
-        trials: number of MC simulations
+        player_hands: list of cards per player, e.g. [["As","Kd"], ["Th","Td"]]
+                      Supports 2 (Hold'em), 4 (PLO4), or 5 (PLO5) hole cards.
+        board: optional list of community cards (0-5)
+        trials: number of MC simulations (auto-scaled down for Omaha)
 
-    Returns {"equities": [{"hand": "As Kd", "equity": 46.3, "wins": 4630, "ties": 200}], "trials": int}
+    Returns {"equities": [{"hand","equity","wins","ties"}], "trials": int}
     """
     if board is None:
         board = []
 
-    # Build remaining deck
-    used = set()
-    for h in player_hands:
-        for c in h:
-            used.add(c)
-    for c in board:
-        used.add(c)
-
-    deck = [r + s for r in RANKS for s in SUITS if (r + s) not in used]
+    n_players = len(player_hands)
+    n_hole = max((len(h) for h in player_hands), default=0)
+    is_omaha = n_hole >= 4
     missing = 5 - len(board)
 
-    n_players = len(player_hands)
+    # Auto-scale trials for Omaha (many more evaluations per trial)
+    if is_omaha:
+        combos_per_player = (n_hole * (n_hole - 1) // 2) * 10  # C(n,2) * C(5,3)
+        evals_per_trial = n_players * combos_per_player
+        trials = min(trials, max(1000, 4_000_000 // max(evals_per_trial, 1)))
+
+    if _HAVE_EVAL7:
+        return _equity_eval7(player_hands, board, trials, is_omaha, missing, n_players)
+    return _equity_fallback(player_hands, board, trials, is_omaha, missing, n_players)
+
+
+def _equity_eval7(player_hands, board, trials, is_omaha, missing, n_players):
+    """Equity calculation using eval7 C extension."""
+    used = set()
+    for h in player_hands:
+        used.update(h)
+    used.update(board)
+
+    e7_hands = [[eval7.Card(c) for c in h] for h in player_hands]
+    e7_board = [eval7.Card(c) for c in board]
+    deck = [eval7.Card(r + s) for r in RANKS for s in SUITS if (r + s) not in used]
+
     wins = [0] * n_players
     ties = [0] * n_players
     total = 0
 
-    for _ in range(trials):
-        drawn = random.sample(deck, missing)
-        full_board = board + drawn
-        scores = [_best5of7(h + full_board) for h in player_hands]
-        best_score = max(scores)
-        winners = [i for i in range(n_players) if scores[i] == best_score]
-        total += 1
-        if len(winners) == 1:
-            wins[winners[0]] += 1
+    if missing == 0:
+        # Board complete — single evaluation
+        if is_omaha:
+            scores = [_best_omaha_hand(h, e7_board) for h in e7_hands]
         else:
-            for i in winners:
-                ties[i] += 1
+            scores = [eval7.evaluate(h + e7_board) for h in e7_hands]
+        best = max(scores)
+        winners = [i for i in range(n_players) if scores[i] == best]
+        total = 1
+        if len(winners) == 1:
+            wins[winners[0]] = 1
+        else:
+            for w in winners:
+                ties[w] = 1
+
+    elif not is_omaha and missing <= 2:
+        # Hold'em: exact enumeration when only 1-2 cards to come
+        for draw in itertools.combinations(deck, missing):
+            fb = e7_board + list(draw)
+            scores = [eval7.evaluate(h + fb) for h in e7_hands]
+            best = max(scores)
+            winners = [i for i in range(n_players) if scores[i] == best]
+            total += 1
+            if len(winners) == 1:
+                wins[winners[0]] += 1
+            else:
+                for w in winners:
+                    ties[w] += 1
+
+    elif is_omaha:
+        # Omaha MC with pre-computed combos and reusable eval buffer
+        hole_pairs = [list(itertools.combinations(h, 2)) for h in e7_hands]
+        board_triple_idx = list(itertools.combinations(range(5), 3))
+        buf = [None] * 5
+
+        for _ in range(trials):
+            random.shuffle(deck)
+            fb = e7_board + deck[:missing]
+            b3s = [tuple(fb[i] for i in idx) for idx in board_triple_idx]
+
+            scores = []
+            for pairs in hole_pairs:
+                best = 0
+                for h2 in pairs:
+                    buf[0] = h2[0]; buf[1] = h2[1]
+                    for b3 in b3s:
+                        buf[2] = b3[0]; buf[3] = b3[1]; buf[4] = b3[2]
+                        s = eval7.evaluate(buf)
+                        if s > best:
+                            best = s
+                scores.append(best)
+
+            best_score = max(scores)
+            winners = [i for i in range(n_players) if scores[i] == best_score]
+            total += 1
+            if len(winners) == 1:
+                wins[winners[0]] += 1
+            else:
+                for w in winners:
+                    ties[w] += 1
+
+    else:
+        # Hold'em Monte Carlo
+        for _ in range(trials):
+            random.shuffle(deck)
+            fb = e7_board + deck[:missing]
+            scores = [eval7.evaluate(h + fb) for h in e7_hands]
+            best = max(scores)
+            winners = [i for i in range(n_players) if scores[i] == best]
+            total += 1
+            if len(winners) == 1:
+                wins[winners[0]] += 1
+            else:
+                for w in winners:
+                    ties[w] += 1
 
     results = []
     for i in range(n_players):
-        eq = (wins[i] + ties[i] / 2.0) / total * 100
+        eq = (wins[i] + ties[i] / 2.0) / total * 100 if total > 0 else 0
         results.append({
             'hand': ' '.join(player_hands[i]),
             'equity': round(eq, 1),
             'wins': wins[i],
             'ties': ties[i],
         })
+    return {'equities': results, 'trials': total}
 
+
+def _equity_fallback(player_hands, board, trials, is_omaha, missing, n_players):
+    """Pure Python equity calculation (fallback when eval7 unavailable)."""
+    used = set()
+    for h in player_hands:
+        used.update(h)
+    used.update(board)
+    deck = [r + s for r in RANKS for s in SUITS if (r + s) not in used]
+
+    if is_omaha:
+        trials = min(trials, 3000)
+
+    wins = [0] * n_players
+    ties = [0] * n_players
+    total = 0
+
+    for _ in range(trials):
+        drawn = random.sample(deck, missing)
+        fb = board + drawn
+
+        if is_omaha:
+            scores = []
+            for h in player_hands:
+                best = None
+                for h2 in itertools.combinations(h, 2):
+                    for b3 in itertools.combinations(fb, 3):
+                        s = _eval5(list(h2) + list(b3))
+                        if best is None or s > best:
+                            best = s
+                scores.append(best)
+        else:
+            scores = [_best5of7(h + fb) for h in player_hands]
+
+        best = max(scores)
+        winners = [i for i in range(n_players) if scores[i] == best]
+        total += 1
+        if len(winners) == 1:
+            wins[winners[0]] += 1
+        else:
+            for w in winners:
+                ties[w] += 1
+
+    results = []
+    for i in range(n_players):
+        eq = (wins[i] + ties[i] / 2.0) / total * 100 if total > 0 else 0
+        results.append({
+            'hand': ' '.join(player_hands[i]),
+            'equity': round(eq, 1),
+            'wins': wins[i],
+            'ties': ties[i],
+        })
     return {'equities': results, 'trials': total}

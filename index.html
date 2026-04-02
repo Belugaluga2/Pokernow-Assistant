@@ -226,6 +226,52 @@
   /* EV section */
   .ev-table td, .ev-table th { font-size: 0.85rem; padding: 0.4rem 0.6rem; }
 
+  /* Player link */
+  .player-link { color: #e2e8f0; text-decoration: none; border-bottom: 1px dashed #475569; cursor: pointer; }
+  .player-link:hover { color: #22c55e; border-bottom-color: #22c55e; }
+
+  /* Hand history modal */
+  .hh-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.7); z-index: 1000;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .hh-panel {
+    background: #1e293b; border-radius: 12px;
+    width: 92%; max-width: 720px; max-height: 85vh;
+    display: flex; flex-direction: column;
+    border: 1px solid #2d3a4f;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+  }
+  .hh-header {
+    padding: 1rem 1.25rem; border-bottom: 1px solid #334155;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .hh-header h2 { font-size: 1.1rem; color: #e2e8f0; margin: 0; }
+  .hh-header .hh-sub { font-size: 0.8rem; color: #64748b; margin-top: 0.15rem; }
+  .hh-close { background: none; border: none; color: #64748b; font-size: 1.4rem; cursor: pointer; padding: 0.25rem; }
+  .hh-close:hover { color: #e2e8f0; }
+  .hh-body { overflow-y: auto; padding: 0.5rem 1.25rem; flex: 1; }
+  .hh-entry { padding: 0.6rem 0; border-bottom: 1px solid #1a2332; }
+  .hh-entry:last-child { border-bottom: none; }
+  .hh-row { display: flex; align-items: center; gap: 0.6rem; }
+  .hh-num { color: #475569; font-size: 0.75rem; font-weight: 600; min-width: 42px; }
+  .hh-type { color: #475569; font-size: 0.7rem; }
+  .hh-allin { }
+  .hh-allin-badge { font-size: 0.65rem; font-weight: 700; color: #f59e0b; background: rgba(245,158,11,0.15); padding: 1px 6px; border-radius: 3px; }
+  .hh-ev-line { margin-top:4px; padding:4px 8px; background:rgba(59,130,246,0.08); border-radius:4px; font-size:0.82rem; display:flex; gap:12px; align-items:center; }
+  .hh-ev-eq { color:#60a5fa; font-weight:700; font-size:0.9rem; }
+  .hh-ev-val { color:#94a3b8; }
+  .hh-ev-diff { font-weight:600; font-size:0.85rem; }
+  .hh-delta { margin-left: auto; font-weight: 700; font-family: 'SF Mono','Cascadia Code',monospace; font-size: 0.85rem; }
+  .hh-cards { font-size: 0.82rem; color: #94a3b8; margin-top: 0.2rem; padding-left: 48px; }
+  .hh-label { color: #475569; font-size: 0.72rem; margin-right: 0.3rem; }
+  .pc { font-weight: 600; margin: 0 1px; letter-spacing: 0.5px; }
+  .pc-h { color: #ef4444; }
+  .pc-d { color: #3b82f6; }
+  .pc-c { color: #22c55e; }
+  .pc-s { color: #6b7280; }
+
   @media (max-width: 600px) {
     .input-section { flex-direction: column; }
     .container { padding: 1rem; }
@@ -442,6 +488,10 @@ const STAT_TABS = {
     cols: [
       { key: 'bpHandsPlayed', label: 'BP Hands', raw: true },
       { key: 'bpVpip', label: 'BP VPIP' },
+      { key: 'bpDbShowdowns', label: 'DB SD', raw: true },
+      { key: 'bpScoop', label: 'Scoop%' },
+      { key: 'bpChop', label: 'Chop%' },
+      { key: 'bpQuartered', label: 'Quarter%' },
     ],
   },
 };
@@ -472,6 +522,8 @@ function renderFullStats(data) {
 }
 
 let _lastUploadedFile = null;  // store file text for on-demand EV
+let _lastEvTrials = 100000;
+let _evData = null;
 
 function switchStatTab(name, btn) {
   _currentStatTab = name;
@@ -509,17 +561,16 @@ function renderStatsTable() {
 
   for (const s of filtered) {
     html += '<tr>';
-    html += `<td>${esc(s.name)}</td>`;
+    html += `<td><a href="#" class="player-link" onclick="showHandHistory(this.textContent); return false">${esc(s.name)}</a></td>`;
     html += `<td class="num">${_currentStatTab === 'bombpot' ? s.bpHandsPlayed : s.handsPlayed}</td>`;
     for (const col of tab.cols) {
       const val = s[col.key];
       const sample = s.samples && s.samples[col.key];
       if (col.raw) {
-        html += `<td class="num">${val}</td>`;
+        html += `<td class="num">${val != null ? val : '—'}</td>`;
       } else {
-        const barClass = val < 20 ? 'vpip-tight' : val < 35 ? 'vpip-normal' : val < 50 ? 'vpip-loose' : 'vpip-very-loose';
         html += `<td class="num"><div class="stat-cell">`;
-        html += `<span class="val">${typeof val === 'number' ? (col.noSample ? val.toFixed(2) : val.toFixed(1) + '%') : val}</span>`;
+        html += `<span class="val">${typeof val === 'number' ? (col.noSample ? val.toFixed(2) : val.toFixed(1) + '%') : '—'}</span>`;
         if (sample && !col.noSample) html += `<span class="sample">${sample}</span>`;
         html += `</div></td>`;
       }
@@ -639,30 +690,60 @@ function renderEV(ev) {
 
   card.style.display = 'block';
 
-  // Not yet computed — show button
+  // Not yet computed — show button with trials input
   if (!ev.computed && !ev.perPlayer) {
     document.getElementById('evContent').innerHTML = `
-      <p style="color:#94a3b8; margin-bottom:1rem;">Monte Carlo equity simulation for all-in hands. This may take a moment.</p>
-      <button class="btn btn-sm" onclick="computeEV()">Compute All-in EV</button>
+      <p style="color:#94a3b8; margin-bottom:1rem;">Monte Carlo equity simulation for all-in hands.</p>
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+        <label style="color:#64748b;font-size:0.85rem;">Trials: <input type="number" id="evTrials" value="100000" min="500" max="500000" step="1000" style="width:80px;padding:0.3rem;background:#0f1117;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:0.85rem;"></label>
+        <button class="btn btn-sm" onclick="computeEV()">Compute All-in EV</button>
+        <span style="color:#475569;font-size:0.75rem;">Lower = faster, higher = more accurate</span>
+      </div>
     `;
     return;
   }
 
   const pp = ev.perPlayer || {};
   const rows = ev.evRows || [];
+  _evData = ev;
+
+  // Get winnings data for net totals
+  const wp = (_statsData && _statsData.winnings && _statsData.winnings.players) || {};
 
   let html = '<h3 style="font-size:0.95rem;color:#cbd5e1;margin-bottom:0.75rem;">Per-Player All-in Summary</h3>';
-  html += '<table class="ev-table"><thead><tr><th>Player</th><th class="num"># All-ins</th><th class="num">Actual</th><th class="num">EV</th><th class="num">Diff (A-EV)</th></tr></thead><tbody>';
+  html += '<table class="ev-table"><thead><tr><th>Player</th><th class="num"># All-ins</th><th class="num">Net Won</th><th class="num">EV-Adjusted</th><th class="num">All-in Diff</th></tr></thead><tbody>';
 
   for (const [name, agg] of Object.entries(pp).sort((a, b) => b[1].diff - a[1].diff)) {
+    const wArr = wp[name];
+    const netWon = wArr ? wArr[wArr.length - 1] : null;
+    const evAdj = netWon != null ? netWon - agg.diff : null;
     const diffClass = agg.diff > 0.5 ? 'positive' : agg.diff < -0.5 ? 'negative' : 'neutral';
-    html += `<tr><td>${esc(name)}</td><td class="num">${agg.count}</td><td class="num">$${agg.actual.toFixed(2)}</td><td class="num">$${agg.ev.toFixed(2)}</td><td class="num ${diffClass}">${agg.diff > 0 ? '+' : ''}$${agg.diff.toFixed(2)}</td></tr>`;
+    const netClass = netWon != null ? (netWon > 0.005 ? 'positive' : netWon < -0.005 ? 'negative' : 'neutral') : '';
+    const evAdjClass = evAdj != null ? (evAdj > 0.005 ? 'positive' : evAdj < -0.005 ? 'negative' : 'neutral') : '';
+    html += `<tr><td><a href="#" class="player-link" onclick="showEvChart(this.textContent); return false">${esc(name)}</a></td><td class="num">${agg.count}</td>`;
+    html += `<td class="num ${netClass}">${netWon != null ? (netWon > 0 ? '+' : '') + '$' + netWon.toFixed(2) : '—'}</td>`;
+    html += `<td class="num ${evAdjClass}">${evAdj != null ? (evAdj > 0 ? '+' : '') + '$' + evAdj.toFixed(2) : '—'}</td>`;
+    html += `<td class="num ${diffClass}">${agg.diff > 0 ? '+' : ''}$${agg.diff.toFixed(2)}</td></tr>`;
   }
   html += '</tbody></table>';
 
-  if (rows.length > 0) {
-    html += `<p style="margin-top:1rem;color:#64748b;font-size:0.85rem;">${rows.length} all-in hands analyzed</p>`;
+  // Summary line with found/analyzed counts and skip reasons
+  const found = ev.totalAllin || rows.length;
+  const analyzed = ev.totalAnalyzed || rows.length;
+  const skipped = found - analyzed;
+  let summary = `${analyzed} all-in hands analyzed`;
+  if (skipped > 0) {
+    const reasons = ev.skipReasons || {};
+    const parts = Object.entries(reasons).map(([r, n]) => `${n} ${r}`);
+    summary += ` (${skipped} skipped — ${parts.join(', ') || 'see details'})`;
   }
+  html += `<p style="margin-top:1rem;color:#64748b;font-size:0.85rem;">${summary}</p>`;
+
+  // Recompute controls
+  html += `<div style="margin-top:0.75rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+    <label style="color:#64748b;font-size:0.85rem;">Trials: <input type="number" id="evTrials" value="${_lastEvTrials}" min="500" max="500000" step="1000" style="width:80px;padding:0.3rem;background:#0f1117;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:0.85rem;"></label>
+    <button class="btn btn-sm btn-outline" onclick="computeEV()">Recompute</button>
+  </div>`;
 
   document.getElementById('evContent').innerHTML = html;
 }
@@ -673,24 +754,279 @@ async function computeEV() {
     return;
   }
 
-  document.getElementById('evContent').innerHTML = '<div style="color:#94a3b8"><span class="spinner" style="width:20px;height:20px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:0.5rem;"></span> Computing all-in EV (this may take a minute)...</div>';
+  const trialsInput = document.getElementById('evTrials');
+  const trials = trialsInput ? parseInt(trialsInput.value) || 100000 : 100000;
+  _lastEvTrials = trials;
+
+  document.getElementById('evContent').innerHTML = `
+    <div id="evProgressArea">
+      <div style="margin-bottom:0.75rem">
+        <span id="evProgressText" style="color:#94a3b8;font-size:0.85rem;">Scanning for all-in hands...</span>
+      </div>
+      <div style="width:100%;height:6px;background:#0f1117;border-radius:3px;overflow:hidden;">
+        <div id="evProgressBar" style="height:100%;width:0%;background:#22c55e;border-radius:3px;transition:width 0.3s;"></div>
+      </div>
+    </div>`;
 
   try {
-    const res = await fetch('/api/stats/ev', {
+    const res = await fetch('/api/stats/ev?trials=' + trials, {
       method: 'POST',
       headers: { 'Content-Type': 'application/octet-stream' },
       body: _lastUploadedFile,
     });
+
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || `Server returned ${res.status}`);
     }
-    const ev = await res.json();
-    ev.computed = true;
-    renderEV(ev);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let result = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop();
+
+      for (const part of parts) {
+        if (!part.startsWith('data: ')) continue;
+        const data = JSON.parse(part.slice(6));
+
+        if (data.error) {
+          throw new Error(data.error);
+        } else if (data.done) {
+          result = data;
+        } else if (data.progress !== undefined) {
+          const pct = data.total > 0 ? Math.round(data.progress / data.total * 100) : 0;
+          const bar = document.getElementById('evProgressBar');
+          const text = document.getElementById('evProgressText');
+          if (bar) bar.style.width = pct + '%';
+          if (text) text.textContent = data.total === 0
+            ? 'No all-in hands found'
+            : `Computing hand ${data.progress} of ${data.total}...`;
+        }
+      }
+    }
+
+    if (result) {
+      result.computed = true;
+      renderEV(result);
+    } else {
+      throw new Error('No result received from server');
+    }
   } catch (err) {
     document.getElementById('evContent').innerHTML = `<p class="error">EV Error: ${esc(err.message)}</p><button class="btn btn-sm btn-outline" style="margin-top:0.5rem" onclick="computeEV()">Retry</button>`;
   }
+}
+
+// ===== HAND HISTORY MODAL =====
+const _GT_LABELS = {th:"Hold'em",he:"Hold'em",oh:'Omaha',plo:'PLO',plo5:'PLO5'};
+
+function _pc(card) {
+  if (!card || card === '|') return '';
+  const rank = card[0] === 'T' ? '10' : card[0];
+  const suit = {s:'\u2660',h:'\u2665',d:'\u2666',c:'\u2663'}[card[1]] || card[1];
+  const cls = 'pc-' + card[1];
+  return `<span class="pc ${cls}">${rank}${suit}</span>`;
+}
+
+function _cards(arr) { return arr ? arr.map(_pc).join(' ') : ''; }
+
+function showHandHistory(playerName) {
+  if (!_statsData || !_statsData.handHistory) return;
+  const hands = _statsData.handHistory[playerName];
+  if (!hands || !hands.length) return;
+
+  let total = 0;
+  hands.forEach(h => total += h.delta);
+
+  const totalClass = total > 0.005 ? 'positive' : total < -0.005 ? 'negative' : 'neutral';
+  const totalStr = (total > 0 ? '+' : '') + '$' + total.toFixed(2);
+
+  // Build EV lookup: handNumber → {equity, ev, actual, diff, street} for this player
+  const evLookup = {};
+  if (_evData && _evData.evRows) {
+    for (const row of _evData.evRows) {
+      for (const p of row.players || []) {
+        if (p.name === playerName) {
+          if (!evLookup[row.handNumber]) evLookup[row.handNumber] = { equity: p.equity, ev: p.ev, actual: p.actual, diff: p.diff, street: row.street };
+          else { evLookup[row.handNumber].ev += p.ev; evLookup[row.handNumber].actual += p.actual; evLookup[row.handNumber].diff += p.diff; }
+        }
+      }
+    }
+  }
+
+  let body = '';
+  for (const h of hands) {
+    const dc = h.delta > 0.005 ? 'positive' : h.delta < -0.005 ? 'negative' : 'neutral';
+    const ds = (h.delta > 0 ? '+' : '') + '$' + h.delta.toFixed(2);
+    const gt = _GT_LABELS[h.gt] || h.gt || '';
+    const evInfo = evLookup[String(h.hand)];
+    const tag = (h.bp ? 'BP ' : '') + gt;
+
+    body += `<div class="hh-entry${evInfo ? ' hh-allin' : ''}"><div class="hh-row">`;
+    body += `<span class="hh-num">#${esc(String(h.hand))}</span>`;
+    if (tag) body += `<span class="hh-type">${tag}</span>`;
+    const streetLabel = evInfo ? (evInfo.street === 'turn' ? 'TURN' : 'FLOP') : '';
+    if (evInfo) body += `<span class="hh-allin-badge">ALL-IN ${streetLabel}</span>`;
+    body += `<span class="hh-delta ${dc}">${ds}</span></div>`;
+
+    if (h.cards && h.cards.length) {
+      body += `<div class="hh-cards"><span class="hh-label">Hand:</span> ${_cards(h.cards)}</div>`;
+    } else {
+      body += `<div class="hh-cards"><span class="hh-label">Hand:</span> <span style="color:#475569;font-style:italic;">not shown</span></div>`;
+    }
+    if (h.board1 && h.board1.length) {
+      const lbl = h.board2 ? 'Board 1:' : 'Board:';
+      body += `<div class="hh-cards"><span class="hh-label">${lbl}</span> ${_cards(h.board1)}</div>`;
+    }
+    if (h.board2 && h.board2.length) {
+      body += `<div class="hh-cards"><span class="hh-label">Board 2:</span> ${_cards(h.board2)}</div>`;
+    }
+    if (evInfo) {
+      const evDiffClass = evInfo.diff > 0.5 ? 'positive' : evInfo.diff < -0.5 ? 'negative' : 'neutral';
+      body += `<div class="hh-ev-line"><span class="hh-ev-eq">${evInfo.equity.toFixed(1)}%</span> <span class="hh-ev-val">EV ${evInfo.ev > 0 ? '+' : ''}$${evInfo.ev.toFixed(2)}</span> <span class="hh-ev-diff ${evDiffClass}">Diff ${evInfo.diff > 0 ? '+' : ''}$${evInfo.diff.toFixed(2)}</span></div>`;
+    }
+    body += '</div>';
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'hh-overlay';
+  overlay.innerHTML = `<div class="hh-panel">
+    <div class="hh-header">
+      <div><h2>${esc(playerName)}</h2><div class="hh-sub">${hands.length} hands &middot; Net: <span class="${totalClass}">${totalStr}</span></div></div>
+      <button class="hh-close" onclick="this.closest('.hh-overlay').remove()">&times;</button>
+    </div>
+    <div class="hh-body">${body}</div>
+  </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+
+  const handler = e => { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', handler); } };
+  document.addEventListener('keydown', handler);
+}
+
+// ===== EV CHART MODAL =====
+function showEvChart(playerName) {
+  if (!_evData || !_statsData || !_statsData.winnings) return;
+  const wp = _statsData.winnings.players || {};
+  const wArr = wp[playerName];
+  if (!wArr) return;
+
+  const handLabels = _statsData.winnings.handLabels || [];
+  const evRows = _evData.evRows || [];
+
+  // Build a map of handNumber → cumulative diff for this player
+  const diffByHand = {};
+  for (const row of evRows) {
+    for (const p of row.players || []) {
+      if (p.name === playerName) {
+        diffByHand[row.handNumber] = (diffByHand[row.handNumber] || 0) + p.diff;
+      }
+    }
+  }
+
+  // Build cumulative actual and EV-adjusted lines
+  // wArr has length handLabels.length + 1 (starts with 0)
+  const actualData = [];
+  const evAdjData = [];
+  let cumDiff = 0;
+
+  for (let i = 0; i < wArr.length; i++) {
+    actualData.push(wArr[i]);
+    if (i > 0) {
+      const hn = handLabels[i - 1];
+      if (diffByHand[hn] !== undefined) cumDiff += diffByHand[hn];
+    }
+    evAdjData.push(Math.round((wArr[i] - cumDiff) * 100) / 100);
+  }
+
+  const xLabels = ['0', ...handLabels];
+
+  const overlay = document.createElement('div');
+  overlay.className = 'hh-overlay';
+  overlay.innerHTML = `<div class="hh-panel" style="max-width:800px;">
+    <div class="hh-header">
+      <div><h2>${esc(playerName)}</h2><div class="hh-sub">Actual vs EV-Adjusted Winnings</div></div>
+      <button class="hh-close" onclick="this.closest('.hh-overlay').remove()">&times;</button>
+    </div>
+    <div style="padding:1rem;height:400px;">
+      <canvas id="evChartCanvas"></canvas>
+    </div>
+  </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+
+  const handler = e => { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', handler); } };
+  document.addEventListener('keydown', handler);
+
+  const ctx = document.getElementById('evChartCanvas').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: xLabels,
+      datasets: [
+        {
+          label: 'Actual',
+          data: actualData,
+          borderColor: '#22c55e',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.1,
+        },
+        {
+          label: 'EV-Adjusted',
+          data: evAdjData,
+          borderColor: '#f59e0b',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.1,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          position: 'top',
+          labels: { color: '#94a3b8', usePointStyle: true, pointStyle: 'line', padding: 12 },
+        },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          borderColor: '#334155',
+          borderWidth: 1,
+          titleColor: '#e2e8f0',
+          bodyColor: '#94a3b8',
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)}`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          display: true,
+          title: { display: true, text: 'Hands', color: '#64748b' },
+          ticks: { color: '#475569', maxTicksLimit: 10 },
+          grid: { color: '#1a2332' },
+        },
+        y: {
+          display: true,
+          title: { display: true, text: 'Winnings ($)', color: '#64748b' },
+          ticks: { color: '#475569', callback: v => '$' + v },
+          grid: { color: '#1a2332' },
+        },
+      },
+    },
+  });
 }
 
 // ===== LEDGER =====

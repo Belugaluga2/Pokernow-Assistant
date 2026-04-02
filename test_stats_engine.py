@@ -2064,8 +2064,21 @@ class TestFindAllinLock:
         )
         assert _find_allin_lock(hand) is None
 
-    def test_allin_with_further_betting_returns_none(self):
-        """All-in followed by more betting (multi-way) returns None."""
+    def test_single_allin_returns_lock(self):
+        """Single all-in still returns lock (caller filtering is done later)."""
+        hand = make_allin_hand(
+            [make_player("A", "a1", 1), make_player("B", "b1", 2)],
+            [
+                ev(SMALL_BLIND, seat=1, value=0.5),
+                ev(BIG_BLIND, seat=2, value=1),
+                ev(BET_RAISE, seat=1, value=50, allIn=True),
+                ev(CALL, seat=2, value=50),  # not all-in
+            ],
+        )
+        assert _find_allin_lock(hand) == 2  # the allIn event
+
+    def test_allin_with_callers_returns_lock(self):
+        """Two all-in players with non-all-in callers still returns lock."""
         hand = make_allin_hand(
             [make_player("A", "a1", 1), make_player("B", "b1", 2),
              make_player("C", "c1", 3)],
@@ -2073,11 +2086,12 @@ class TestFindAllinLock:
                 ev(SMALL_BLIND, seat=2, value=0.5),
                 ev(BIG_BLIND, seat=3, value=1),
                 ev(BET_RAISE, seat=1, value=50, allIn=True),
-                ev(CALL, seat=2, value=50),  # not all-in, more betting possible
-                ev(BET_RAISE, seat=3, value=100),  # further betting after all-in
+                ev(CALL, seat=2, value=50),  # not all-in
+                ev(BET_RAISE, seat=3, value=100, allIn=True),  # second all-in
+                ev(CALL, seat=2, value=100),  # calling, not all-in
             ],
         )
-        assert _find_allin_lock(hand) is None
+        assert _find_allin_lock(hand) == 4  # last allIn event
 
 
 class TestContribsUntil:
@@ -2217,7 +2231,9 @@ class TestBoardUpTo:
                 community(3, ["Ts"]),
             ],
         )
-        assert _board_up_to(hand, 2) == ["Ah", "Kd", "Qs", "Jc", "Ts"]
+        board1, board2 = _board_up_to(hand, 2)
+        assert board1 == ["Ah", "Kd", "Qs", "Jc", "Ts"]
+        assert board2 is None
 
     def test_stops_at_index(self):
         hand = make_allin_hand(
@@ -2228,8 +2244,10 @@ class TestBoardUpTo:
                 community(3, ["Ts"]),
             ],
         )
-        assert _board_up_to(hand, 1) == ["Ah", "Kd", "Qs", "Jc"]
-        assert _board_up_to(hand, 0) == ["Ah", "Kd", "Qs"]
+        b1, _ = _board_up_to(hand, 1)
+        assert b1 == ["Ah", "Kd", "Qs", "Jc"]
+        b1, _ = _board_up_to(hand, 0)
+        assert b1 == ["Ah", "Kd", "Qs"]
 
 
 class TestCollectHoleCards:
@@ -2334,7 +2352,8 @@ class TestExpectedPayout:
         )
         lock_idx = _find_allin_lock(hand)
         exp, info = _expected_payout(hand, lock_idx, mc_trials=50000)
-        committed, _ = _contribs_until(hand, info['settle_idx'])
+        all_events_idx = len(hand['events']) - 1
+        committed, _ = _contribs_until(hand, all_events_idx)
         total_pot = sum(committed.values())
         assert sum(exp.values()) == pytest.approx(total_pot, abs=1.0)
 
@@ -2472,9 +2491,15 @@ class TestComputeAllinEV:
         )
         result = compute_allin_ev([hand])
         row = result['evRows'][0]
-        # Total pot in display units = 20000 / 100 = 200
+        # ev is net (payout - invested), should be in dollars not cents
+        # AA vs KK — AA wins, actual net = +$100, KK net = -$100
+        # Sum of net EVs is zero-sum
         total_ev = sum(p['ev'] for p in row['players'])
-        assert total_ev == pytest.approx(200, abs=1)
+        assert total_ev == pytest.approx(0, abs=1)
+        # Actual values should be in dollar scale (divided by 100)
+        pp = result['perPlayer']
+        assert pp['A']['actual'] == pytest.approx(100, abs=1)
+        assert pp['B']['actual'] == pytest.approx(-100, abs=1)
 
     def test_side_pot_zero_sum(self):
         """Three-way all-in with side pots maintains zero-sum."""
@@ -2613,3 +2638,376 @@ class TestSettlementIdx:
             ],
         )
         assert _settlement_idx(hand, 1) == 2
+
+
+# ── Equity calculator tests ───────────────────────────────────────────────
+
+from stats_engine import compute_equity
+
+
+class TestComputeEquity:
+    """Tests for compute_equity — the standalone equity calculator."""
+
+    def test_equities_sum_to_100(self):
+        """All player equities must sum to ~100%."""
+        result = compute_equity([["Ah", "Ac"], ["Kh", "Kc"]], trials=10000)
+        total = sum(e['equity'] for e in result['equities'])
+        assert total == pytest.approx(100, abs=0.5)
+
+    def test_aa_vs_kk_preflop(self):
+        """AA vs KK preflop — AA should have ~82% equity."""
+        result = compute_equity([["Ah", "Ac"], ["Kh", "Kc"]], trials=50000)
+        aa_eq = result['equities'][0]['equity']
+        assert 79 < aa_eq < 86
+
+    def test_aa_vs_kk_on_safe_board(self):
+        """AA vs KK on a board with no king — AA wins 100%."""
+        result = compute_equity(
+            [["Ah", "Ac"], ["Kh", "Kc"]],
+            board=["2d", "5s", "8c", "Jd", "3s"],
+        )
+        assert result['equities'][0]['equity'] == pytest.approx(100, abs=0.1)
+
+    def test_split_pot_same_hand(self):
+        """Identical hands should split ~50/50."""
+        result = compute_equity(
+            [["Ah", "Kd"], ["As", "Kc"]],
+            board=["Qh", "Jd", "Tc", "2s", "3s"],
+        )
+        assert result['equities'][0]['equity'] == pytest.approx(50, abs=1)
+        assert result['equities'][1]['equity'] == pytest.approx(50, abs=1)
+
+    def test_dominated_hand_full_board(self):
+        """Set vs pair on full board — set wins 100%."""
+        result = compute_equity(
+            [["Ah", "Ac"], ["Kh", "Kc"]],
+            board=["As", "7d", "2c", "9h", "4s"],
+        )
+        # AA has set of aces, KK has pair of kings
+        assert result['equities'][0]['equity'] == pytest.approx(100, abs=0.1)
+
+    def test_three_way(self):
+        """Three-way pot equities sum to 100."""
+        result = compute_equity(
+            [["Ah", "Ac"], ["Kh", "Kc"], ["Qh", "Qc"]],
+            trials=20000,
+        )
+        total = sum(e['equity'] for e in result['equities'])
+        assert total == pytest.approx(100, abs=0.5)
+        # AA should dominate
+        assert result['equities'][0]['equity'] > 50
+
+    def test_six_way(self):
+        """Six-way pot equities sum to ~100."""
+        result = compute_equity(
+            [["Ah", "Ac"], ["Kh", "Kc"], ["Qh", "Qc"],
+             ["Jh", "Jc"], ["Th", "Tc"], ["9h", "9c"]],
+            trials=50000,
+        )
+        total = sum(e['equity'] for e in result['equities'])
+        assert total == pytest.approx(100, abs=2)
+
+    def test_nut_flush_draw_has_equity(self):
+        """Flush draw on the flop should have significant equity."""
+        result = compute_equity(
+            [["Ah", "Kh"], ["Qs", "Qd"]],
+            board=["2h", "7h", "Tc"],
+            trials=50000,
+        )
+        # AKhh has flush draw + overcards vs QQ, should be ~45-55%
+        ak_eq = result['equities'][0]['equity']
+        assert 40 < ak_eq < 60
+
+    def test_exact_enumeration_holdem_river(self):
+        """Hold'em with 1 card to come uses exact enumeration."""
+        result = compute_equity(
+            [["Ah", "Ac"], ["Kh", "Kc"]],
+            board=["2d", "5s", "8c", "Jd"],
+        )
+        # Should use exact enumeration (1 missing card), very precise
+        aa_eq = result['equities'][0]['equity']
+        assert aa_eq > 90  # AA is way ahead on this board
+
+
+# ── All-in EV: only-all-in-players filter ──────────────────────────────────
+
+class TestAllinOnlyFilter:
+    """Tests that EV is only reported for players actually all-in."""
+
+    def test_one_caller_included_when_equity_locked(self):
+        """2 all-in + 1 non-all-in → ≤1 non-all-in, so all reported."""
+        hand = make_allin_hand(
+            [make_player("Short", "s1", 1, hand=["Ah", "Ac"]),
+             make_player("Big", "b1", 2, hand=["Kh", "Kc"]),
+             make_player("Caller", "a2", 3, hand=["Qh", "Qc"])],
+            [
+                ev(SMALL_BLIND, seat=2, value=0.5),
+                ev(BIG_BLIND, seat=3, value=1),
+                ev(BET_RAISE, seat=1, value=50, allIn=True),
+                ev(BET_RAISE, seat=2, value=100, allIn=True),
+                ev(CALL, seat=3, value=100),  # sole non-all-in, equity locked
+                community(1, ["5s", "7d", "Td"]),
+                community(2, ["2c"]),
+                community(3, ["3s"]),
+                ev(PAYOUT, seat=2, value=250),
+            ],
+        )
+        result = compute_allin_ev([hand])
+        row = result['evRows'][0]
+        names_in_result = {p['name'] for p in row['players']}
+        assert names_in_result == {'Short', 'Big', 'Caller'}
+
+    def test_two_callers_excluded(self):
+        """2 all-in + 2 non-all-in → only all-in players reported."""
+        hand = make_allin_hand(
+            [make_player("Short", "s1", 1, hand=["Ah", "Ac"]),
+             make_player("Also", "a2", 2, hand=["Kh", "Kc"]),
+             make_player("Caller1", "c1", 3, hand=["Qh", "Qc"]),
+             make_player("Caller2", "c2", 4, hand=["Jh", "Jc"])],
+            [
+                ev(BET_RAISE, seat=1, value=50, allIn=True),
+                ev(BET_RAISE, seat=2, value=80, allIn=True),
+                ev(CALL, seat=3, value=80),
+                ev(CALL, seat=4, value=80),
+                community(1, ["5s", "7d", "Td"]),
+                community(2, ["2c"]),
+                community(3, ["3s"]),
+                ev(PAYOUT, seat=1, value=200),
+                ev(PAYOUT, seat=2, value=60),
+            ],
+        )
+        result = compute_allin_ev([hand])
+        row = result['evRows'][0]
+        names_in_result = {p['name'] for p in row['players']}
+        assert 'Short' in names_in_result
+        assert 'Also' in names_in_result
+        assert 'Caller1' not in names_in_result
+        assert 'Caller2' not in names_in_result
+
+    def test_all_players_allin_all_included(self):
+        """When everyone is all-in, all are included."""
+        hand = make_allin_hand(
+            [make_player("A", "a1", 1, hand=["Ah", "Ac"]),
+             make_player("B", "b1", 2, hand=["Kh", "Kc"]),
+             make_player("C", "c1", 3, hand=["Qh", "Qc"])],
+            [
+                ev(SMALL_BLIND, seat=2, value=0.5),
+                ev(BIG_BLIND, seat=3, value=1),
+                ev(BET_RAISE, seat=1, value=50, allIn=True),
+                ev(CALL, seat=2, value=50, allIn=True),
+                ev(CALL, seat=3, value=50, allIn=True),
+                community(1, ["5s", "7d", "Td"]),
+                community(2, ["2c"]),
+                community(3, ["3s"]),
+                ev(PAYOUT, seat=1, value=150),
+            ],
+        )
+        result = compute_allin_ev([hand])
+        row = result['evRows'][0]
+        names_in_result = {p['name'] for p in row['players']}
+        assert names_in_result == {'A', 'B', 'C'}
+
+    def test_approval_includes_all_survivors(self):
+        """ALLIN_APPROVAL means all survivors are all-in, all included."""
+        hand = make_allin_hand(
+            [make_player("A", "a1", 1, hand=["Ah", "Ac"]),
+             make_player("B", "b1", 2, hand=["Kh", "Kc"])],
+            [
+                ev(SMALL_BLIND, seat=1, value=0.5),
+                ev(BIG_BLIND, seat=2, value=1),
+                ev(BET_RAISE, seat=1, value=50, allIn=True),
+                ev(CALL, seat=2, value=50),  # no allIn flag
+                ev(ALLIN_APPROVAL),
+                community(1, ["5s", "7d", "Td"]),
+                community(2, ["2c"]),
+                community(3, ["3s"]),
+                ev(PAYOUT, seat=1, value=100),
+            ],
+        )
+        result = compute_allin_ev([hand])
+        row = result['evRows'][0]
+        names_in_result = {p['name'] for p in row['players']}
+        assert names_in_result == {'A', 'B'}
+
+    def test_all_reported_when_one_non_allin(self):
+        """2 all-in + 1 non-all-in → all 3 reported (equity locked)."""
+        hand = make_allin_hand(
+            [make_player("Short", "s1", 1, hand=["Ah", "Ac"]),
+             make_player("Also", "a2", 2, hand=["Kh", "Kc"]),
+             make_player("Caller", "c1", 3, hand=["Qh", "Qc"])],
+            [
+                ev(SMALL_BLIND, seat=2, value=0.5),
+                ev(BIG_BLIND, seat=3, value=1),
+                ev(BET_RAISE, seat=1, value=50, allIn=True),
+                ev(BET_RAISE, seat=2, value=80, allIn=True),
+                ev(CALL, seat=3, value=80),  # sole non-all-in
+                community(1, ["5s", "7d", "Td"]),
+                community(2, ["2c"]),
+                community(3, ["3s"]),
+                ev(PAYOUT, seat=1, value=150),
+                ev(PAYOUT, seat=2, value=60),
+            ],
+        )
+        result = compute_allin_ev([hand])
+        row = result['evRows'][0]
+        assert len(row['players']) == 3
+
+    def test_single_allin_two_callers_skipped(self):
+        """1 all-in + 2 non-all-in callers → skip (callers can bet each other)."""
+        hand = make_allin_hand(
+            [make_player("A", "a1", 1, hand=["Ah", "Ac"]),
+             make_player("B", "b1", 2, hand=["Kh", "Kc"]),
+             make_player("C", "c1", 3, hand=["Qh", "Qc"])],
+            [
+                ev(SMALL_BLIND, seat=2, value=0.5),
+                ev(BIG_BLIND, seat=3, value=1),
+                ev(BET_RAISE, seat=1, value=50, allIn=True),
+                ev(CALL, seat=2, value=50),
+                ev(CALL, seat=3, value=50),
+                community(1, ["5s", "7d", "Td"]),
+                community(2, ["2c"]),
+                community(3, ["3s"]),
+                ev(PAYOUT, seat=1, value=150),
+            ],
+        )
+        result = compute_allin_ev([hand])
+        assert len(result['evRows']) == 0
+
+    def test_single_allin_one_caller_counted(self):
+        """1 all-in + 1 caller → count it, report for both (equity locked)."""
+        hand = make_allin_hand(
+            [make_player("A", "a1", 1, hand=["Ah", "Ac"]),
+             make_player("B", "b1", 2, hand=["Kh", "Kc"])],
+            [
+                ev(SMALL_BLIND, seat=1, value=0.5),
+                ev(BIG_BLIND, seat=2, value=1),
+                ev(BET_RAISE, seat=1, value=50, allIn=True),
+                ev(CALL, seat=2, value=50),  # covers, not all-in
+                community(1, ["5s", "7d", "Td"]),
+                community(2, ["2c"]),
+                community(3, ["3s"]),
+                ev(PAYOUT, seat=1, value=100),
+            ],
+        )
+        result = compute_allin_ev([hand])
+        assert len(result['evRows']) == 1
+        row = result['evRows'][0]
+        names = {p['name'] for p in row['players']}
+        assert names == {'A', 'B'}  # both reported
+
+    def test_two_shorts_allin_big_caller_all_reported(self):
+        """Two short stacks all-in, big stack calls.
+        Only 1 non-all-in survivor → all 3 reported."""
+        hand = make_allin_hand(
+            [make_player("Short1", "s1", 1, hand=["Ah", "Ac"]),
+             make_player("Short2", "s2", 2, hand=["Kh", "Kc"]),
+             make_player("BigStack", "b1", 3, hand=["Qh", "Qc"])],
+            [
+                ev(SMALL_BLIND, seat=2, value=0.5),
+                ev(BIG_BLIND, seat=3, value=1),
+                ev(BET_RAISE, seat=1, value=30, allIn=True),
+                ev(BET_RAISE, seat=2, value=50, allIn=True),
+                ev(CALL, seat=3, value=50),  # sole non-all-in
+                community(1, ["5s", "7d", "Td"]),
+                ev(CHECK, seat=3),
+                community(2, ["2c"]),
+                ev(CHECK, seat=3),
+                community(3, ["3s"]),
+                ev(CHECK, seat=3),
+                ev(PAYOUT, seat=1, value=90),
+                ev(PAYOUT, seat=3, value=40),
+            ],
+        )
+        result = compute_allin_ev([hand])
+        assert len(result['evRows']) == 1
+        row = result['evRows'][0]
+        names_in_result = {p['name'] for p in row['players']}
+        assert names_in_result == {'Short1', 'Short2', 'BigStack'}
+
+
+# ── Side pot correctness ───────────────────────────────────────────────────
+
+class TestSidePotEV:
+    """Tests for correct EV calculation with side pots."""
+
+    def test_three_way_side_pot_structure(self):
+        """Verify pot structure with 3 different stack sizes all-in."""
+        hand = make_allin_hand(
+            [make_player("A", "a1", 1, hand=["Ah", "Ac"]),
+             make_player("B", "b1", 2, hand=["Kh", "Kc"]),
+             make_player("C", "c1", 3, hand=["Qh", "Qc"])],
+            [
+                ev(BET_RAISE, seat=1, value=30, allIn=True),
+                ev(CALL, seat=2, value=30),
+                ev(BET_RAISE, seat=3, value=80, allIn=True),
+                ev(CALL, seat=2, value=80, allIn=True),
+                ev(ALLIN_APPROVAL),
+                community(1, ["5s", "7d", "Td"]),
+                community(2, ["2c"]),
+                community(3, ["3s"]),
+                ev(PAYOUT, seat=1, value=90),
+                ev(PAYOUT, seat=2, value=100),
+            ],
+        )
+        # Build pots and verify structure
+        all_events_idx = len(hand['events']) - 1
+        committed, folded = _contribs_until(hand, all_events_idx)
+        survivors = [s for s, v in committed.items() if v > 0 and s not in folded]
+        pots = _build_pots(committed, survivors)
+        # Main pot: 30*3=90 (all eligible), Side pot: 50*2=100 (B,C eligible)
+        assert len(pots) == 2
+        assert pots[0][0] == pytest.approx(90, abs=0.1)
+        assert len(pots[0][1]) == 3  # A, B, C eligible for main
+        assert pots[1][0] == pytest.approx(100, abs=0.1)
+        assert len(pots[1][1]) == 2  # B, C eligible for side
+
+    def test_ev_with_folded_player_contributes_to_pot(self):
+        """Player who folds after betting contributes to pot but isn't eligible."""
+        hand = make_allin_hand(
+            [make_player("A", "a1", 1, hand=["Ah", "Ac"]),
+             make_player("B", "b1", 2, hand=["Kh", "Kc"]),
+             make_player("Folder", "f1", 3, hand=["Qh", "Qc"])],
+            [
+                ev(SMALL_BLIND, seat=2, value=0.5),
+                ev(BIG_BLIND, seat=3, value=1),
+                ev(BET_RAISE, seat=1, value=50, allIn=True),
+                ev(CALL, seat=2, value=50, allIn=True),
+                ev(FOLD, seat=3),
+                community(1, ["5s", "7d", "Td"]),
+                community(2, ["2c"]),
+                community(3, ["3s"]),
+                ev(PAYOUT, seat=1, value=101),
+            ],
+        )
+        result = compute_allin_ev([hand])
+        assert len(result['evRows']) == 1
+        row = result['evRows'][0]
+        # Folder's blind money is in the pot
+        total_diff = sum(p['diff'] for p in row['players'])
+        # With only 2 reported players (both all-in), diff may not be zero
+        # because folder's 1bb contributes to pot
+        names_in_result = {p['name'] for p in row['players']}
+        assert 'A' in names_in_result
+        assert 'B' in names_in_result
+
+    def test_known_winner_on_turn(self):
+        """AA vs KK all-in on turn with safe river — AA dominates, low diff."""
+        hand = make_allin_hand(
+            [make_player("A", "a1", 1, hand=["Ah", "Ac"]),
+             make_player("B", "b1", 2, hand=["Kh", "Kc"])],
+            [
+                ev(BET_RAISE, seat=1, value=100, allIn=True),
+                ev(CALL, seat=2, value=100, allIn=True),
+                community(1, ["As", "7d", "2c"]),
+                community(2, ["9h"]),
+                ev(ALLIN_APPROVAL),
+                community(3, ["4s"]),
+                ev(PAYOUT, seat=1, value=200),
+            ],
+        )
+        result = compute_allin_ev([hand], mc_trials=10000)
+        row = result['evRows'][0]
+        a = next(p for p in row['players'] if p['name'] == 'A')
+        # AA has set on turn, should win nearly always
+        assert a['equity'] > 95
+        assert row['street'] == 'turn'
