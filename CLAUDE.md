@@ -142,9 +142,6 @@ When players go all-in, computes expected value based on card equity vs actual r
 - PLO5: 1,300 trials
 - EV is computed on-demand (separate button) because it's slow
 
-### Known Issue
-The EV calculations may not be net-zero across all players. This needs investigation — likely related to pot building, refund handling, or the settlement index calculation.
-
 ## CSV Log Format
 ```
 entry,at,order

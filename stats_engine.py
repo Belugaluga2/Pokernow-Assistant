@@ -982,18 +982,6 @@ def _find_allin_lock(hand):
     return last_allin
 
 
-def _settlement_idx(hand, lock_idx):
-    events = hand.get('events', [])
-    j = lock_idx
-    for k in range(lock_idx + 1, len(events)):
-        t = events[k].get('payload', {}).get('type')
-        if t in (REFUND, SHOW_MUCK, ALLIN_APPROVAL, CHECK, FOLD, END_OF_HAND):
-            j = k
-            continue
-        if t in (COMMUNITY, PAYOUT, ANTE, BIG_BLIND, SMALL_BLIND, POSTED_BB, POSTED_SB_DEAD, CALL, BET_RAISE):
-            break
-    return j
-
 
 def _contribs_until(hand, until_idx):
     committed = defaultdict(float)
@@ -1082,16 +1070,6 @@ def _build_pots(committed, survivors):
         prev = cap
     return pots
 
-
-def _actual_payouts_after(hand, from_idx):
-    out = defaultdict(float)
-    for i, ev in enumerate(hand.get('events', [])):
-        if i < from_idx:
-            continue
-        pl = ev.get('payload', {})
-        if pl.get('type') == PAYOUT and pl.get('value'):
-            out[pl.get('seat')] += float(pl['value'])
-    return out
 
 
 def _is_omaha(game_type):

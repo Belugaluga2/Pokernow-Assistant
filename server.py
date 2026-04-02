@@ -197,20 +197,6 @@ def extract_stacks_from_state(state):
 
 # ===== LEDGER COMPUTATION =====
 
-def find_active_players(logs):
-    """Quick scan of money logs to find player IDs still at the table."""
-    active = set()
-    for log in logs:
-        msg = log['msg']
-        m = re.search(r'The player "(.+?) @ (.+?)" (?:joined|re-joined)', msg)
-        if m:
-            active.add(m.group(2))
-            continue
-        m = re.search(r'The player "(.+?) @ (.+?)" quits', msg)
-        if m:
-            active.discard(m.group(2))
-    return list(active)
-
 
 def compute_ledger(logs, active_stacks):
     """Compute ledger from money-only log messages."""
@@ -359,16 +345,6 @@ def _compute_stats_from_hands(hands):
     result['ev'] = {'available': has_eval7(), 'computed': False}
     return result
 
-
-def _compute_stats_from_logs(logs):
-    """Convert API logs to CSV format, parse hands, compute all stats."""
-    csv_lines = ['entry,at,order']
-    for log in reversed(logs):
-        entry = log.get('msg', '').replace('"', '""')
-        csv_lines.append(f'"{entry}",{log.get("created_at","")},0')
-    csv_text = '\n'.join(csv_lines)
-    hands, _ = parse_hand_data(csv_text)
-    return _compute_stats_from_hands(hands)
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):

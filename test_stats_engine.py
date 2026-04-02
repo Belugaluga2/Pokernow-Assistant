@@ -1994,8 +1994,6 @@ from stats_engine import (
     _board_up_to,
     _collect_hole_cards,
     _expected_payout,
-    _actual_payouts_after,
-    _settlement_idx,
 )
 
 
@@ -2595,49 +2593,6 @@ class TestComputeAllinEV:
             total_diff = sum(p['diff'] for p in row['players'])
             assert total_diff == pytest.approx(0, abs=0.02)
 
-
-class TestSettlementIdx:
-    """Tests for _settlement_idx."""
-
-    def test_advances_past_show_muck_and_fold(self):
-        hand = make_allin_hand(
-            [make_player("A", "a1", 1), make_player("B", "b1", 2)],
-            [
-                ev(BET_RAISE, seat=1, value=100, allIn=True),     # 0
-                ev(CALL, seat=2, value=100, allIn=True),           # 1 = lock
-                ev(SHOW_MUCK, seat=1, cards=["Ah", "Ac"]),         # 2
-                ev(SHOW_MUCK, seat=2, cards=["Kh", "Kc"]),         # 3
-                community(1, ["Qs", "Jd", "2c"]),                  # 4 — stops here
-                ev(PAYOUT, seat=1, value=200),
-            ],
-        )
-        # lock_idx=1 (last all-in), settlement advances past SHOW_MUCK events
-        assert _settlement_idx(hand, 1) == 3
-
-    def test_stops_at_community(self):
-        hand = make_allin_hand(
-            [make_player("A", "a1", 1), make_player("B", "b1", 2)],
-            [
-                ev(BET_RAISE, seat=1, value=100, allIn=True),
-                ev(CALL, seat=2, value=100, allIn=True),  # lock_idx=1
-                community(1, ["Qs", "Jd", "2c"]),
-                ev(PAYOUT, seat=1, value=200),
-            ],
-        )
-        assert _settlement_idx(hand, 1) == 1
-
-    def test_includes_refund(self):
-        hand = make_allin_hand(
-            [make_player("A", "a1", 1), make_player("B", "b1", 2)],
-            [
-                ev(BET_RAISE, seat=1, value=100, allIn=True),
-                ev(CALL, seat=2, value=50, allIn=True),
-                ev(REFUND, seat=1, value=50),   # idx=2
-                community(1, ["Qs", "Jd", "2c"]),
-                ev(PAYOUT, seat=1, value=100),
-            ],
-        )
-        assert _settlement_idx(hand, 1) == 2
 
 
 # ── Equity calculator tests ───────────────────────────────────────────────
