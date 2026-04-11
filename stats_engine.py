@@ -1177,13 +1177,17 @@ def _expected_payout(hand, lock_idx, mc_trials):
     except Exception:
         return None, 'Card parse error'
 
-    # Build deck minus ALL known cards (hole cards + both boards)
+    # Build deck minus ALL known cards (hole cards + both boards + dead cards)
     known_cards = set()
     for h in hole:
         known_cards.update(h)
     known_cards.update(board1)
     if is_double:
         known_cards.update(board2)
+    # Dead cards: folded players whose hole cards were shown/revealed
+    for s, cards in known_hole.items():
+        if s not in survivors:
+            known_cards.update(cards)
 
     deck = eval7.Deck()
     for cs in known_cards:
@@ -1427,7 +1431,7 @@ def _best5of7(seven_cards):
     return best
 
 
-def compute_equity(player_hands, board=None, trials=100000):
+def compute_equity(player_hands, board=None, dead=None, trials=100000):
     """Monte Carlo equity calculator. Supports Hold'em, PLO4, PLO5.
 
     Uses eval7 (C extension) when available for ~30-100x speedup.
@@ -1437,12 +1441,15 @@ def compute_equity(player_hands, board=None, trials=100000):
         player_hands: list of cards per player, e.g. [["As","Kd"], ["Th","Td"]]
                       Supports 2 (Hold'em), 4 (PLO4), or 5 (PLO5) hole cards.
         board: optional list of community cards (0-5)
+        dead: optional list of dead/removed cards (e.g. folded but shown)
         trials: number of MC simulations (auto-scaled down for Omaha)
 
     Returns {"equities": [{"hand","equity","wins","ties"}], "trials": int}
     """
     if board is None:
         board = []
+    if dead is None:
+        dead = []
 
     n_players = len(player_hands)
     n_hole = max((len(h) for h in player_hands), default=0)
@@ -1456,16 +1463,17 @@ def compute_equity(player_hands, board=None, trials=100000):
         trials = min(trials, max(1000, 4_000_000 // max(evals_per_trial, 1)))
 
     if _HAVE_EVAL7:
-        return _equity_eval7(player_hands, board, trials, is_omaha, missing, n_players)
-    return _equity_fallback(player_hands, board, trials, is_omaha, missing, n_players)
+        return _equity_eval7(player_hands, board, dead, trials, is_omaha, missing, n_players)
+    return _equity_fallback(player_hands, board, dead, trials, is_omaha, missing, n_players)
 
 
-def _equity_eval7(player_hands, board, trials, is_omaha, missing, n_players):
+def _equity_eval7(player_hands, board, dead, trials, is_omaha, missing, n_players):
     """Equity calculation using eval7 C extension."""
     used = set()
     for h in player_hands:
         used.update(h)
     used.update(board)
+    used.update(dead)
 
     e7_hands = [[eval7.Card(c) for c in h] for h in player_hands]
     e7_board = [eval7.Card(c) for c in board]
@@ -1563,12 +1571,13 @@ def _equity_eval7(player_hands, board, trials, is_omaha, missing, n_players):
     return {'equities': results, 'trials': total}
 
 
-def _equity_fallback(player_hands, board, trials, is_omaha, missing, n_players):
+def _equity_fallback(player_hands, board, dead, trials, is_omaha, missing, n_players):
     """Pure Python equity calculation (fallback when eval7 unavailable)."""
     used = set()
     for h in player_hands:
         used.update(h)
     used.update(board)
+    used.update(dead)
     deck = [r + s for r in RANKS for s in SUITS if (r + s) not in used]
 
     if is_omaha:

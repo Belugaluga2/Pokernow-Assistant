@@ -212,44 +212,53 @@ def compute_ledger(logs, active_stacks):
         players[pid]['name'] = name
         return players[pid]
 
+    _NUM = r'(\d+(?:\.\d+)?)'  # matches "100.00" or "7000" but not trailing period
+
+    def _dollars(raw):
+        """Parse a value that may be dollars (with decimal) or cents (without)."""
+        val = float(raw)
+        if '.' not in raw:
+            val /= 100
+        return val
+
     for log in logs:
         msg = log['msg']
 
-        m = re.search(r'The player "(.+?) @ (.+?)" (?:joined|re-joined) the game with a stack of (\d+\.?\d*)', msg)
+        m = re.search(r'The player "(.+?) @ (.+?)" (?:joined|re-joined) the game with a stack of ' + _NUM, msg)
         if m:
             p = get_player(m.group(1), m.group(2))
             p['isActive'] = True
-            p['lastStack'] = float(m.group(3))
+            p['lastStack'] = _dollars(m.group(3))
             continue
 
-        m = re.search(r'The player "(.+?) @ (.+?)" quits the game with a stack of (\d+\.?\d*)', msg)
+        m = re.search(r'The player "(.+?) @ (.+?)" quits the game with a stack of ' + _NUM, msg)
         if m:
             p = get_player(m.group(1), m.group(2))
-            p['cashouts'].append(float(m.group(3)))
+            p['cashouts'].append(_dollars(m.group(3)))
             p['isActive'] = False
             p['lastStack'] = 0
             continue
 
-        m = re.search(r'The admin approved the player "(.+?) @ (.+?)" (?:participation|request|adding) .+?(\d+\.\d+)', msg)
+        m = re.search(r'The admin approved the player "(.+?) @ (.+?)" (?:participation|request|adding) .+?' + _NUM, msg)
         if m:
             p = get_player(m.group(1), m.group(2))
-            p['buyins'].append(float(m.group(3)))
+            p['buyins'].append(_dollars(m.group(3)))
             continue
 
-        m = re.search(r'The admin updated the player "(.+?) @ (.+?)" stack from (\d+\.?\d*) to (\d+\.?\d*)', msg)
+        m = re.search(r'The admin updated the player "(.+?) @ (.+?)" stack from ' + _NUM + r' to ' + _NUM, msg)
         if m:
             p = get_player(m.group(1), m.group(2))
-            diff = float(m.group(4)) - float(m.group(3))
+            diff = _dollars(m.group(4)) - _dollars(m.group(3))
             if diff > 0:
                 p['buyins'].append(diff)
             elif diff < 0:
                 p['cashouts'].append(abs(diff))
             continue
 
-        m = re.search(r'"(.+?) @ (.+?)" stand up with the stack of (\d+\.?\d*)', msg)
+        m = re.search(r'"(.+?) @ (.+?)" stand up with the stack of ' + _NUM, msg)
         if m:
             p = get_player(m.group(1), m.group(2))
-            p['lastStack'] = float(m.group(3))
+            p['lastStack'] = _dollars(m.group(3))
             continue
 
     # Build results
@@ -505,13 +514,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 body = json.loads(self.rfile.read(length).decode('utf-8'))
                 player_hands = body.get('hands', [])
                 board = body.get('board', [])
+                dead = body.get('dead', [])
                 trials = min(body.get('trials', 100000), 200000)
 
                 if len(player_hands) < 2:
                     self._json_response(400, {'error': 'Need at least 2 hands'})
                     return
 
-                result = compute_equity(player_hands, board, trials)
+                result = compute_equity(player_hands, board, dead, trials)
                 self._json_response(200, result)
             except Exception as e:
                 print(f'  ERROR equity: {e}')
