@@ -5,80 +5,167 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PokerNow Assistant</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  // Apply saved theme before paint to prevent flash of wrong theme
+  (function() {
+    var theme = localStorage.getItem('pn-theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+</script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #0f1117;
-    color: #e2e8f0;
-    min-height: 100vh;
-    line-height: 1.5;
+  :root {
+    --bg-base: #08090d;
+    --bg-surface: rgba(17, 20, 28, 0.7);
+    --bg-elevated: rgba(24, 28, 40, 0.8);
+    --bg-input: rgba(12, 14, 20, 0.9);
+    --border-subtle: rgba(255, 255, 255, 0.06);
+    --border-default: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.12);
+    --border-focus: rgba(52, 211, 153, 0.5);
+    --text-primary: #f0f2f5;
+    --text-secondary: #9ca3b4;
+    --text-tertiary: #5c6478;
+    --text-muted: #3d4455;
+    --accent: #34d399;
+    --accent-dim: #10b981;
+    --accent-glow: rgba(52, 211, 153, 0.15);
+    --accent-deep: rgba(16, 185, 129, 0.08);
+    --red: #f87171;
+    --red-dim: rgba(248, 113, 113, 0.12);
+    --yellow: #fbbf24;
+    --yellow-dim: rgba(251, 191, 36, 0.12);
+    --blue: #60a5fa;
+    --blue-dim: rgba(96, 165, 250, 0.1);
+    --purple: #a78bfa;
+    --purple-dim: rgba(167, 139, 250, 0.12);
+    --glass-bg: rgba(17, 20, 28, 0.55);
+    --glass-border: rgba(255, 255, 255, 0.06);
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.2);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 18px;
+    --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-base: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  .container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(16, 185, 129, 0.06) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 60%, rgba(96, 165, 250, 0.03) 0%, transparent 50%);
+  }
+
+  .container { max-width: 1120px; margin: 0 auto; padding: 2.5rem 1.5rem; }
 
   h1 {
-    font-size: 2rem;
-    font-weight: 700;
+    font-size: 2.25rem;
+    font-weight: 800;
     text-align: center;
-    margin-bottom: 0.25rem;
-    background: linear-gradient(135deg, #22c55e, #16a34a);
+    margin-bottom: 0;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, #34d399 0%, #10b981 40%, #059669 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+    filter: drop-shadow(0 0 24px rgba(52, 211, 153, 0.2));
   }
 
   .subtitle {
     text-align: center;
-    color: #64748b;
-    margin-bottom: 2rem;
+    color: var(--text-tertiary);
+    margin-bottom: 2.5rem;
     font-size: 0.9rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
   }
 
-  .input-section { display: flex; gap: 0.75rem; margin-bottom: 2rem; }
+  .input-section {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+    position: relative;
+  }
 
   .input-section input {
     flex: 1;
-    padding: 0.75rem 1rem;
-    background: #1e293b;
-    border: 1px solid #334155;
-    border-radius: 8px;
-    color: #e2e8f0;
+    padding: 0.8rem 1.1rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-family: inherit;
     font-size: 0.95rem;
+    font-weight: 500;
     outline: none;
-    transition: border-color 0.2s;
+    transition: border-color var(--transition-base), box-shadow var(--transition-base), background var(--transition-base);
+    backdrop-filter: blur(8px);
   }
 
-  .input-section input:focus { border-color: #22c55e; }
-  .input-section input::placeholder { color: #475569; }
+  .input-section input:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.08), 0 0 20px rgba(52, 211, 153, 0.05);
+    background: rgba(12, 14, 20, 1);
+  }
+  .input-section input::placeholder { color: var(--text-muted); font-weight: 400; }
 
   .btn {
-    padding: 0.75rem 1.5rem;
-    background: #16a34a;
+    padding: 0.8rem 1.75rem;
+    background: linear-gradient(135deg, var(--accent-dim) 0%, #059669 100%);
     color: #fff;
     border: none;
-    border-radius: 8px;
+    border-radius: var(--radius-md);
+    font-family: inherit;
     font-size: 0.95rem;
-    font-weight: 600;
+    font-weight: 650;
     cursor: pointer;
     white-space: nowrap;
-    transition: background 0.2s;
+    transition: all var(--transition-base);
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    letter-spacing: 0.01em;
   }
 
-  .btn:hover { background: #15803d; }
-  .btn:disabled { background: #334155; cursor: not-allowed; }
-  .btn-sm { padding: 0.5rem 1rem; font-size: 0.85rem; border-radius: 6px; }
-  .btn-outline { background: transparent; border: 1px solid #334155; color: #94a3b8; }
-  .btn-outline:hover { background: #1e293b; border-color: #475569; color: #e2e8f0; }
+  .btn:hover {
+    background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    transform: translateY(-1px);
+  }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { background: var(--bg-elevated); color: var(--text-muted); cursor: not-allowed; box-shadow: none; transform: none; }
+  .btn-sm { padding: 0.5rem 1rem; font-size: 0.85rem; border-radius: var(--radius-sm); }
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    box-shadow: none;
+  }
+  .btn-outline:hover {
+    background: var(--bg-elevated);
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+    box-shadow: none;
+    transform: none;
+  }
 
-  .status { text-align: center; padding: 2rem; color: #94a3b8; display: none; }
+  .status { text-align: center; padding: 2rem; color: var(--text-secondary); display: none; }
   .status.visible { display: block; }
 
   .spinner {
     width: 32px; height: 32px;
-    border: 3px solid #334155;
-    border-top-color: #22c55e;
+    border: 3px solid var(--border-default);
+    border-top-color: var(--accent);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
     margin: 0 auto 1rem;
@@ -87,303 +174,688 @@
   @keyframes spin { to { transform: rotate(360deg); } }
 
   .progress-bar-container {
-    width: 100%; max-width: 320px; height: 6px;
-    background: #1e293b; border-radius: 3px;
+    width: 100%; max-width: 340px; height: 5px;
+    background: var(--bg-elevated); border-radius: 3px;
     margin: 0 auto 1rem; overflow: hidden;
   }
   .progress-bar-fill {
     height: 100%; width: 0%; border-radius: 3px;
-    background: linear-gradient(90deg, #22c55e, #16a34a);
+    background: linear-gradient(90deg, var(--accent), var(--accent-dim));
     transition: width 0.3s ease;
+    box-shadow: 0 0 12px rgba(52, 211, 153, 0.4);
   }
 
-  .error { color: #ef4444; }
+  .error { color: var(--red); }
 
   /* Main tabs */
-  .tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid #1e293b; }
-
-  .tab {
-    padding: 0.6rem 1.5rem;
-    background: none;
-    border: none;
-    color: #64748b;
-    font-size: 0.95rem;
-    font-weight: 600;
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -2px;
-    transition: color 0.2s, border-color 0.2s;
+  .tabs {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 1.75rem;
+    padding: 4px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-subtle);
+    backdrop-filter: blur(12px);
   }
 
-  .tab:hover { color: #94a3b8; }
-  .tab.active { color: #22c55e; border-bottom-color: #22c55e; }
+  .tab {
+    flex: 1;
+    padding: 0.6rem 1.25rem;
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-base);
+    letter-spacing: 0.01em;
+  }
+
+  .tab:hover { color: var(--text-secondary); background: rgba(255, 255, 255, 0.03); }
+  .tab.active {
+    color: var(--accent);
+    background: var(--accent-deep);
+    box-shadow: 0 1px 4px rgba(52, 211, 153, 0.1);
+  }
 
   .tab-content { display: none; }
-  .tab-content.active { display: block; }
+  .tab-content.active { display: block; animation: fadeIn 0.25s ease; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
   .results { display: none; }
   .results.visible { display: block; }
 
   .card {
-    background: #1e293b;
-    border-radius: 10px;
-    padding: 1.25rem;
+    background: var(--glass-bg);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
     margin-bottom: 1.25rem;
-    border: 1px solid #2d3a4f;
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(16px);
+    box-shadow: var(--glass-shadow);
+    transition: border-color var(--transition-base);
   }
 
+  .card:hover { border-color: var(--border-default); }
+
   .card h2 {
-    font-size: 1.1rem;
-    font-weight: 600;
+    font-size: 1rem;
+    font-weight: 700;
     margin-bottom: 1rem;
-    color: #cbd5e1;
+    color: var(--text-secondary);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    font-size: 0.8rem;
   }
 
   table { width: 100%; border-collapse: collapse; }
 
   th {
     text-align: left;
-    padding: 0.5rem 0.75rem;
-    font-size: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.7rem;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #64748b;
-    border-bottom: 1px solid #334155;
+    letter-spacing: 0.06em;
+    color: var(--text-tertiary);
+    border-bottom: 1px solid var(--border-default);
     cursor: pointer;
     user-select: none;
+    transition: color var(--transition-fast);
   }
 
-  th:hover { color: #94a3b8; }
+  th:hover { color: var(--text-secondary); }
   th.sort-asc::after { content: ' \u25B2'; font-size: 0.6rem; }
   th.sort-desc::after { content: ' \u25BC'; font-size: 0.6rem; }
 
   td {
-    padding: 0.6rem 0.75rem;
+    padding: 0.75rem 0.85rem;
     font-size: 0.9rem;
-    border-bottom: 1px solid #1a2332;
+    border-bottom: 1px solid var(--border-subtle);
+    transition: background var(--transition-fast);
   }
 
+  tr:hover td { background: rgba(255, 255, 255, 0.015); }
   tr:last-child td { border-bottom: none; }
+  tbody tr:nth-child(even) td { background: rgba(255, 255, 255, 0.01); }
+  tbody tr:nth-child(even):hover td { background: rgba(255, 255, 255, 0.03); }
 
-  .num { text-align: right; font-variant-numeric: tabular-nums; font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace; }
-  .positive { color: #22c55e; }
-  .negative { color: #ef4444; }
-  .neutral { color: #94a3b8; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace; font-size: 0.88rem; }
+  .positive { color: var(--accent); }
+  .negative { color: var(--red); }
+  .neutral { color: var(--text-secondary); }
 
   .settlement {
-    display: flex; align-items: center; padding: 0.6rem 0.75rem;
+    display: flex; align-items: center; padding: 0.7rem 0.85rem;
     gap: 0.75rem; font-size: 0.9rem;
-    background: rgba(15, 17, 23, 0.4);
-    border-radius: 6px;
-    margin-bottom: 0.35rem;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: var(--radius-sm);
+    margin-bottom: 0.4rem;
+    border: 1px solid var(--border-subtle);
+    transition: border-color var(--transition-fast), background var(--transition-fast);
   }
-  .settlement.forced { border: 1px dashed rgba(245,158,11,0.3); }
+  .settlement:hover { border-color: var(--border-default); background: rgba(255, 255, 255, 0.03); }
+  .settlement.forced { border: 1px dashed rgba(251, 191, 36, 0.25); }
 
-  .settlement .from { color: #ef4444; font-weight: 600; min-width: 100px; text-align: right; }
-  .settlement .arrow { color: #475569; }
-  .settlement .amount { color: #facc15; font-weight: 700; font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace; }
-  .settlement .to { color: #22c55e; font-weight: 600; }
-  .settlement .forced-tag { color: #f59e0b; font-size: 0.7rem; margin-left: auto; opacity: 0.8; }
+  .settlement .from { color: var(--red); font-weight: 600; min-width: 100px; text-align: right; }
+  .settlement .arrow { color: var(--text-muted); font-size: 0.85rem; }
+  .settlement .amount { color: var(--yellow); font-weight: 700; font-family: 'JetBrains Mono', monospace; font-size: 0.95rem; }
+  .settlement .to { color: var(--accent); font-weight: 600; }
+  .settlement .forced-tag { color: #f59e0b; font-size: 0.65rem; margin-left: auto; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
 
   /* Shared control row styles */
-  .controls-section { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #1a2332; }
-  .controls-title { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; margin-bottom: 0.5rem; }
+  .controls-section { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle); }
+  .controls-title { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 0.5rem; }
   .control-row {
     display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem;
-    padding: 0.45rem 0.65rem; background: rgba(15, 17, 23, 0.35);
-    border-radius: 6px; border: 1px solid transparent; transition: border-color 0.15s;
+    padding: 0.5rem 0.65rem; background: rgba(255, 255, 255, 0.02);
+    border-radius: var(--radius-sm); border: 1px solid transparent; transition: border-color var(--transition-fast);
   }
-  .control-row:hover { border-color: #1a2332; }
+  .control-row:hover { border-color: var(--border-subtle); }
   .control-row select {
-    background: #0f1117; border: 1px solid #334155; border-radius: 6px;
-    color: #e2e8f0; padding: 0.35rem 0.5rem; font-size: 0.85rem;
+    background: var(--bg-input); border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+    color: var(--text-primary); padding: 0.35rem 0.5rem; font-size: 0.85rem; font-family: inherit;
     cursor: pointer; flex: 1; min-width: 0;
+    transition: border-color var(--transition-fast);
   }
-  .control-row select:focus { border-color: #22c55e; outline: none; }
-  .control-label { color: #64748b; font-size: 0.8rem; white-space: nowrap; }
+  .control-row select:focus { border-color: var(--accent); outline: none; }
+  .control-label { color: var(--text-tertiary); font-size: 0.8rem; white-space: nowrap; }
   .control-remove {
-    background: none; border: none; color: #475569; cursor: pointer;
+    background: none; border: none; color: var(--text-muted); cursor: pointer;
     padding: 0.15rem 0.35rem; line-height: 1; border-radius: 4px;
-    font-size: 0.9rem; transition: all 0.15s;
+    font-size: 0.9rem; transition: all var(--transition-fast);
   }
-  .control-remove:hover { color: #ef4444; background: rgba(239,68,68,0.1); }
+  .control-remove:hover { color: var(--red); background: var(--red-dim); }
   .control-add {
     display: inline-flex; align-items: center; gap: 0.35rem;
-    font-size: 0.8rem; padding: 0.35rem 0.75rem; margin-top: 0.25rem;
-    background: none; border: 1px dashed #334155; border-radius: 6px;
-    color: #94a3b8; cursor: pointer; transition: all 0.15s;
+    font-size: 0.8rem; padding: 0.4rem 0.85rem; margin-top: 0.35rem;
+    background: none; border: 1px dashed var(--border-default); border-radius: var(--radius-sm);
+    color: var(--text-secondary); cursor: pointer; transition: all var(--transition-fast); font-family: inherit;
   }
-  .control-add:hover { border-color: #22c55e; color: #22c55e; }
+  .control-add:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-deep); }
 
   /* Settlements header with copy button */
   .settlements-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
   .settlements-header h2 { margin-bottom: 0; }
   .copy-btn {
-    display: inline-flex; align-items: center; gap: 0.35rem;
-    padding: 0.3rem 0.7rem; background: rgba(15, 17, 23, 0.4);
-    border: 1px solid #334155; border-radius: 6px;
-    color: #94a3b8; font-size: 0.8rem; font-weight: 500;
-    cursor: pointer; transition: all 0.2s;
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.35rem 0.8rem; background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+    color: var(--text-secondary); font-size: 0.78rem; font-weight: 600; font-family: inherit;
+    cursor: pointer; transition: all var(--transition-base); letter-spacing: 0.01em;
   }
-  .copy-btn:hover { border-color: #475569; color: #e2e8f0; }
-  .copy-btn.copied { border-color: #22c55e; color: #22c55e; }
+  .copy-btn:hover { border-color: var(--border-strong); color: var(--text-primary); background: rgba(255, 255, 255, 0.05); }
+  .copy-btn.copied { border-color: var(--accent); color: var(--accent); background: var(--accent-deep); }
   .copy-btn svg { flex-shrink: 0; }
 
   /* Legacy force-controls kept for compat */
-  .force-controls { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #1a2332; }
+  .force-controls { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-subtle); }
   .force-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
   .force-row select {
-    background: #0f1117; border: 1px solid #334155; border-radius: 6px;
-    color: #e2e8f0; padding: 0.35rem 0.5rem; font-size: 0.85rem; cursor: pointer;
+    background: var(--bg-input); border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+    color: var(--text-primary); padding: 0.35rem 0.5rem; font-size: 0.85rem; cursor: pointer; font-family: inherit;
   }
-  .force-row select:focus { border-color: #22c55e; outline: none; }
-  .force-row .force-label { color: #64748b; font-size: 0.8rem; }
-  .force-remove { background: none; border: 1px solid rgba(239,68,68,0.3); color: #ef4444; cursor: pointer; border-radius: 4px; padding: 0.15rem 0.45rem; font-size: 0.8rem; transition: all 0.15s; }
-  .force-remove:hover { background: rgba(239,68,68,0.1); border-color: #ef4444; }
-  .force-add { font-size: 0.8rem; padding: 0.35rem 0.75rem; background: none; border: 1px dashed #334155; border-radius: 6px; color: #94a3b8; cursor: pointer; transition: all 0.15s; }
-  .force-add:hover { border-color: #22c55e; color: #22c55e; }
+  .force-row select:focus { border-color: var(--accent); outline: none; }
+  .force-row .force-label { color: var(--text-tertiary); font-size: 0.8rem; }
+  .force-remove { background: none; border: 1px solid rgba(248,113,113,0.2); color: var(--red); cursor: pointer; border-radius: 4px; padding: 0.15rem 0.45rem; font-size: 0.8rem; transition: all var(--transition-fast); }
+  .force-remove:hover { background: var(--red-dim); border-color: var(--red); }
+  .force-add { font-size: 0.8rem; padding: 0.35rem 0.75rem; background: none; border: 1px dashed var(--border-default); border-radius: var(--radius-sm); color: var(--text-secondary); cursor: pointer; transition: all var(--transition-fast); font-family: inherit; }
+  .force-add:hover { border-color: var(--accent); color: var(--accent); }
 
-  .game-info { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+  .game-info { display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
   .game-info .stat { display: flex; flex-direction: column; }
-  .game-info .stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; }
-  .game-info .stat-value { font-size: 1.15rem; font-weight: 700; color: #e2e8f0; }
+  .game-info .stat-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600; margin-bottom: 0.15rem; }
+  .game-info .stat-value { font-size: 1.25rem; font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
 
-  .vpip-bar-container { width: 100%; height: 6px; background: #0f1117; border-radius: 3px; overflow: hidden; }
+  .vpip-bar-container { width: 100%; height: 5px; background: var(--bg-base); border-radius: 3px; overflow: hidden; }
   .vpip-bar { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
-  .vpip-tight { background: #3b82f6; }
-  .vpip-normal { background: #22c55e; }
-  .vpip-loose { background: #f59e0b; }
-  .vpip-very-loose { background: #ef4444; }
+  .vpip-tight { background: var(--blue); }
+  .vpip-normal { background: var(--accent); }
+  .vpip-loose { background: var(--yellow); }
+  .vpip-very-loose { background: var(--red); }
 
   /* Sub-tabs for stats categories */
-  .sub-tabs { display: flex; gap: 0.25rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .sub-tabs {
+    display: flex; gap: 0.35rem; margin-bottom: 1.25rem; flex-wrap: wrap;
+    padding: 3px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-subtle);
+  }
   .sub-tab {
-    padding: 0.4rem 0.9rem;
-    background: #0f1117;
-    border: 1px solid #334155;
-    border-radius: 6px;
-    color: #64748b;
+    padding: 0.45rem 1rem;
+    background: transparent;
+    border: none;
+    border-radius: 5px;
+    color: var(--text-tertiary);
+    font-family: inherit;
     font-size: 0.8rem;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all var(--transition-base);
+    letter-spacing: 0.01em;
   }
-  .sub-tab:hover { color: #94a3b8; border-color: #475569; }
-  .sub-tab.active { color: #22c55e; border-color: #22c55e; background: #0f2918; }
+  .sub-tab:hover { color: var(--text-secondary); background: rgba(255, 255, 255, 0.03); }
+  .sub-tab.active { color: var(--accent); background: var(--accent-deep); }
 
   /* Upload area */
   .upload-zone {
-    border: 2px dashed #334155;
-    border-radius: 10px;
-    padding: 2rem;
+    border: 2px dashed var(--border-default);
+    border-radius: var(--radius-lg);
+    padding: 2.5rem 2rem;
     text-align: center;
-    transition: all 0.2s;
+    transition: all var(--transition-smooth);
     cursor: pointer;
+    background: rgba(255, 255, 255, 0.01);
+    position: relative;
+    overflow: hidden;
   }
+  .upload-zone::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 80%, var(--accent-deep), transparent 70%);
+    opacity: 0;
+    transition: opacity var(--transition-smooth);
+    pointer-events: none;
+  }
+  .upload-zone:hover::before, .upload-zone.dragover::before { opacity: 1; }
   .upload-zone:hover, .upload-zone.dragover {
-    border-color: #22c55e;
-    background: rgba(34, 197, 94, 0.05);
+    border-color: rgba(52, 211, 153, 0.35);
+    background: rgba(52, 211, 153, 0.02);
   }
-  .upload-zone p { color: #94a3b8; margin-bottom: 0.75rem; }
-  .upload-zone .hint { font-size: 0.8rem; color: #64748b; }
+  .upload-zone p { color: var(--text-secondary); margin-bottom: 0.75rem; position: relative; }
+  .upload-zone .hint { font-size: 0.8rem; color: var(--text-tertiary); position: relative; }
 
   /* Stat value with sample */
-  .stat-cell { display: flex; flex-direction: column; align-items: flex-end; }
-  .stat-cell .val { font-weight: 600; }
-  .stat-cell .sample { font-size: 0.7rem; color: #475569; }
+  .stat-cell { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+  .stat-cell .val { font-weight: 600; font-size: 0.9rem; }
+  .stat-cell .sample { font-size: 0.75rem; color: var(--text-tertiary); font-family: 'JetBrains Mono', monospace; }
 
   /* Chart container */
   .chart-container { position: relative; height: 350px; margin: 1rem 0; }
 
   /* EV section */
-  .ev-table td, .ev-table th { font-size: 0.85rem; padding: 0.4rem 0.6rem; text-align: center; }
+  .ev-table td, .ev-table th { font-size: 0.85rem; padding: 0.5rem 0.6rem; text-align: center; }
   .ev-table td:first-child, .ev-table th:first-child { text-align: left; }
   .ev-table th.sortable { cursor: pointer; user-select: none; }
-  .ev-table th.sortable:hover { color: #e2e8f0; }
+  .ev-table th.sortable:hover { color: var(--text-primary); }
 
   /* Player link */
-  .player-link { color: #e2e8f0; text-decoration: none; border-bottom: 1px dashed #475569; cursor: pointer; }
-  .player-link:hover { color: #22c55e; border-bottom-color: #22c55e; }
+  .player-link {
+    color: var(--text-primary); text-decoration: none;
+    border-bottom: 1px dashed var(--text-muted); cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+  .player-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
 
   /* Hand history modal */
   .hh-overlay {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.7); z-index: 1000;
+    background: rgba(0, 0, 0, 0.75); z-index: 1000;
     display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(8px);
+    animation: fadeIn 0.2s ease;
   }
   .hh-panel {
-    background: #1e293b; border-radius: 12px;
-    width: 92%; max-width: 720px; max-height: 85vh;
+    background: var(--bg-surface); border-radius: var(--radius-xl);
+    width: 92%; max-width: 740px; max-height: 85vh;
     display: flex; flex-direction: column;
-    border: 1px solid #2d3a4f;
-    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+    border: 1px solid var(--border-default);
+    box-shadow: 0 32px 64px -16px rgba(0, 0, 0, 0.6), 0 0 1px rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(24px);
+    animation: slideUp 0.25s ease;
   }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
   .hh-header {
-    padding: 1rem 1.25rem; border-bottom: 1px solid #334155;
+    padding: 1.1rem 1.35rem; border-bottom: 1px solid var(--border-subtle);
     display: flex; justify-content: space-between; align-items: center;
   }
-  .hh-header h2 { font-size: 1.1rem; color: #e2e8f0; margin: 0; }
-  .hh-header .hh-sub { font-size: 0.8rem; color: #64748b; margin-top: 0.15rem; }
-  .hh-close { background: none; border: none; color: #64748b; font-size: 1.4rem; cursor: pointer; padding: 0.25rem; }
-  .hh-close:hover { color: #e2e8f0; }
-  .hh-body { overflow-y: auto; padding: 0.5rem 1.25rem; flex: 1; }
-  .hh-entry { padding: 0.6rem 0; border-bottom: 1px solid #1a2332; }
+  .hh-header h2 { font-size: 1.1rem; color: var(--text-primary); margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+  .hh-header .hh-sub { font-size: 0.8rem; color: var(--text-tertiary); margin-top: 0.2rem; }
+  .hh-close {
+    background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-subtle);
+    color: var(--text-tertiary); font-size: 1.2rem; cursor: pointer;
+    padding: 0.3rem 0.5rem; border-radius: var(--radius-sm);
+    transition: all var(--transition-fast); line-height: 1;
+  }
+  .hh-close:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.08); border-color: var(--border-default); }
+  .hh-body { overflow-y: auto; padding: 0.5rem 1.35rem; flex: 1; }
+  .hh-body::-webkit-scrollbar { width: 6px; }
+  .hh-body::-webkit-scrollbar-track { background: transparent; }
+  .hh-body::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 3px; }
+  .hh-body::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+  .hh-entry { padding: 0.65rem 0; border-bottom: 1px solid var(--border-subtle); }
   .hh-entry:last-child { border-bottom: none; }
   .hh-row { display: flex; align-items: center; gap: 0.6rem; }
-  .hh-num { color: #475569; font-size: 0.75rem; font-weight: 600; min-width: 42px; }
-  .hh-type { color: #475569; font-size: 0.7rem; }
+  .hh-num { color: var(--text-muted); font-size: 0.75rem; font-weight: 600; min-width: 42px; font-family: 'JetBrains Mono', monospace; }
+  .hh-type { color: var(--text-muted); font-size: 0.7rem; }
   .hh-allin { }
-  .hh-allin-badge { font-size: 0.65rem; font-weight: 700; color: #f59e0b; background: rgba(245,158,11,0.15); padding: 1px 6px; border-radius: 3px; }
-  .hh-db-badge { font-size: 0.65rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; }
-  .hh-db-scoop { color: #22c55e; background: rgba(34,197,94,0.15); }
-  .hh-db-threequarter { color: #a78bfa; background: rgba(167,139,250,0.15); }
-  .hh-db-chop { color: #60a5fa; background: rgba(96,165,250,0.15); }
-  .hh-db-quarter { color: #f87171; background: rgba(248,113,113,0.15); }
-  .hh-filter-btn { background:none; border:1px solid #334155; color:#94a3b8; padding:2px 10px; border-radius:4px; font-size:0.75rem; cursor:pointer; }
-  .hh-filter-btn:hover { border-color:#a78bfa; color:#e2e8f0; }
-  .hh-filter-btn.active { border-color:#a78bfa; color:#a78bfa; }
-  .hh-ev-line { margin-top:4px; padding:4px 8px; background:rgba(59,130,246,0.08); border-radius:4px; font-size:0.82rem; display:flex; gap:12px; align-items:center; }
-  .hh-ev-eq { color:#60a5fa; font-weight:700; font-size:0.9rem; }
-  .hh-ev-val { color:#94a3b8; }
-  .hh-ev-diff { font-weight:600; font-size:0.85rem; }
-  .hh-sort-bar { display:flex; align-items:center; gap:6px; padding:6px 16px; border-bottom:1px solid #1e293b; }
-  .hh-sort-btn { background:none; border:1px solid #334155; color:#94a3b8; padding:2px 10px; border-radius:4px; font-size:0.75rem; cursor:pointer; }
-  .hh-sort-btn:hover { border-color:#60a5fa; color:#e2e8f0; }
-  .hh-sort-btn.active { border-color:#60a5fa; color:#60a5fa; }
+  .hh-allin-badge { font-size: 0.6rem; font-weight: 700; color: var(--yellow); background: var(--yellow-dim); padding: 2px 7px; border-radius: 4px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .hh-db-badge { font-size: 0.6rem; font-weight: 700; padding: 2px 7px; border-radius: 4px; letter-spacing: 0.04em; text-transform: uppercase; }
+  .hh-db-scoop { color: var(--accent); background: var(--accent-glow); }
+  .hh-db-threequarter { color: var(--purple); background: var(--purple-dim); }
+  .hh-db-chop { color: var(--blue); background: var(--blue-dim); }
+  .hh-db-quarter { color: var(--red); background: var(--red-dim); }
+  .hh-filter-btn {
+    background: none; border: 1px solid var(--border-default); color: var(--text-secondary);
+    padding: 2px 10px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; font-family: inherit;
+    transition: all var(--transition-fast);
+  }
+  .hh-filter-btn:hover { border-color: var(--purple); color: var(--text-primary); }
+  .hh-filter-btn.active { border-color: var(--purple); color: var(--purple); background: var(--purple-dim); }
+  .hh-ev-line {
+    margin-top: 5px; padding: 5px 10px; background: var(--blue-dim); border-radius: 5px;
+    font-size: 0.82rem; display: flex; gap: 12px; align-items: center;
+  }
+  .hh-ev-eq { color: var(--blue); font-weight: 700; font-size: 0.9rem; }
+  .hh-ev-val { color: var(--text-secondary); }
+  .hh-ev-diff { font-weight: 600; font-size: 0.85rem; }
+  .hh-sort-bar {
+    display: flex; align-items: center; gap: 6px; padding: 8px 18px;
+    border-bottom: 1px solid var(--border-subtle); background: rgba(255, 255, 255, 0.01);
+  }
+  .hh-sort-btn {
+    background: none; border: 1px solid var(--border-default); color: var(--text-secondary);
+    padding: 3px 10px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; font-family: inherit;
+    transition: all var(--transition-fast);
+  }
+  .hh-sort-btn:hover { border-color: var(--blue); color: var(--text-primary); }
+  .hh-sort-btn.active { border-color: var(--blue); color: var(--blue); background: var(--blue-dim); }
 
   /* Biggest pots */
-  .bp-entry { padding:10px 0; border-bottom:1px solid #1e293b; }
-  .bp-entry:last-child { border-bottom:none; }
-  .bp-header { display:flex; align-items:center; gap:10px; margin-bottom:4px; }
-  .bp-rank { color:#f59e0b; font-weight:700; font-size:0.9rem; min-width:20px; }
-  .bp-pot { color:#22c55e; font-weight:700; font-size:1.05rem; }
-  .bp-player { display:flex; align-items:center; gap:8px; padding:2px 0 2px 30px; font-size:0.85rem; }
-  .bp-name { color:#cbd5e1; min-width:100px; }
-  .bp-cards { flex:1; }
-  .bp-delta { margin-left:auto; font-weight:600; }
-  .hh-delta { margin-left: auto; font-weight: 700; font-family: 'SF Mono','Cascadia Code',monospace; font-size: 0.85rem; }
-  .hh-cards { font-size: 0.82rem; color: #94a3b8; margin-top: 0.2rem; padding-left: 48px; }
-  .hh-label { color: #475569; font-size: 0.72rem; margin-right: 0.3rem; }
-  .pc { font-weight: 600; margin: 0 1px; letter-spacing: 0.5px; }
-  .pc-h { color: #ef4444; }
-  .pc-d { color: #3b82f6; }
-  .pc-c { color: #22c55e; }
-  .pc-s { color: #6b7280; }
+  .bp-entry { padding: 12px 0; border-bottom: 1px solid var(--border-subtle); }
+  .bp-entry:last-child { border-bottom: none; }
+  .bp-header { display: flex; align-items: center; gap: 10px; margin-bottom: 5px; }
+  .bp-rank { color: var(--yellow); font-weight: 800; font-size: 0.9rem; min-width: 20px; }
+  .bp-pot { color: var(--accent); font-weight: 700; font-size: 1.05rem; font-family: 'JetBrains Mono', monospace; }
+  .bp-player { display: flex; align-items: center; gap: 8px; padding: 3px 0 3px 30px; font-size: 0.85rem; }
+  .bp-name { color: var(--text-secondary); min-width: 100px; }
+  .bp-cards { flex: 1; }
+  .bp-delta { margin-left: auto; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+  .hh-delta { margin-left: auto; font-weight: 700; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; }
+  .hh-cards { font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.2rem; padding-left: 48px; }
+  .hh-label { color: var(--text-muted); font-size: 0.72rem; margin-right: 0.3rem; font-weight: 600; letter-spacing: 0.02em; }
+  .pc { font-weight: 700; margin: 0 1px; letter-spacing: 0.5px; }
+  .pc-h { color: #f87171; }
+  .pc-d { color: #60a5fa; }
+  .pc-c { color: #34d399; }
+  .pc-s { color: #9ca3b4; }
+
+  /* Equity tab */
+  .eq-board { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 1rem; }
+  .eq-card-slot {
+    width: 46px; height: 62px; border-radius: var(--radius-sm);
+    border: 2px dashed var(--border-default); background: var(--bg-input);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 1rem; font-weight: 700;
+    transition: all var(--transition-base);
+    position: relative;
+  }
+  .eq-card-slot:hover { border-color: rgba(52, 211, 153, 0.4); background: rgba(52, 211, 153, 0.03); }
+  .eq-card-slot.filled { border-style: solid; border-color: var(--border-strong); background: var(--bg-elevated); }
+  .eq-card-slot .pc { font-size: 1.1rem; }
+  .eq-picker {
+    position: fixed; z-index: 1000;
+    background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-md);
+    padding: 0.6rem; display: grid; grid-template-columns: repeat(13, 1fr);
+    gap: 3px; width: max-content;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), 0 0 1px rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(16px);
+  }
+  .eq-picker-card {
+    width: 31px; height: 31px; border-radius: 4px; border: 1px solid var(--border-subtle);
+    background: var(--bg-input); display: flex; align-items: center; justify-content: center;
+    font-size: 0.7rem; font-weight: 700; cursor: pointer; transition: all var(--transition-fast);
+  }
+  .eq-picker-card:hover { background: var(--bg-elevated); border-color: var(--accent); }
+  .eq-picker-card.used { opacity: 0.15; pointer-events: none; }
+
+  .eq-player-row {
+    display: flex; align-items: center; gap: 0.75rem; padding: 0.8rem 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .eq-player-row:last-of-type { border-bottom: none; }
+  .eq-player-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .eq-mode-toggle {
+    font-size: 0.72rem; padding: 0.25rem 0.55rem; border-radius: 4px;
+    border: 1px solid var(--border-default); background: transparent; color: var(--text-secondary);
+    cursor: pointer; transition: all var(--transition-base); font-family: inherit; font-weight: 600;
+  }
+  .eq-mode-toggle.active { border-color: var(--accent); color: var(--accent); background: var(--accent-deep); }
+  .eq-hand-slots { display: flex; gap: 0.3rem; }
+  .eq-hand-slot {
+    width: 34px; height: 46px; border-radius: 4px;
+    border: 1px dashed var(--border-default); background: var(--bg-input);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 0.75rem; font-weight: 700;
+    position: relative; transition: all var(--transition-fast);
+  }
+  .eq-hand-slot:hover { border-color: rgba(52, 211, 153, 0.4); }
+  .eq-hand-slot.filled { border-style: solid; border-color: var(--border-strong); }
+  .eq-lock-slots { display: flex; gap: 0.2rem; margin-left: 0.5rem; }
+  .eq-lock-slot {
+    width: 36px; height: 48px; border-radius: 4px;
+    border: 1px dashed var(--border-subtle); background: rgba(8, 9, 13, 0.6);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 0.8rem; font-weight: 700;
+    position: relative; opacity: 0.5; transition: all var(--transition-fast);
+  }
+  .eq-lock-slot:hover { border-color: var(--yellow); opacity: 1; }
+  .eq-lock-slot.filled { border-style: solid; border-color: var(--yellow); opacity: 1; background: var(--yellow-dim); }
+  .eq-presets { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; }
+  .eq-preset {
+    padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.75rem;
+    border: 1px solid var(--border-default); background: transparent; color: var(--text-secondary);
+    cursor: pointer; transition: all var(--transition-base); font-family: inherit; font-weight: 500;
+  }
+  .eq-preset:hover { border-color: rgba(52, 211, 153, 0.3); color: var(--text-primary); background: var(--accent-deep); }
+  .eq-result-bar {
+    height: 36px; border-radius: var(--radius-sm); overflow: hidden;
+    display: flex; margin: 1rem 0;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+  .eq-result-bar > div {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.8rem; font-weight: 700; color: #fff;
+    transition: width 0.5s ease;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+  .eq-result-labels { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
+  .eq-result-label { font-size: 0.85rem; font-weight: 700; }
+  .eq-hands-display { margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary); }
+  .eq-action-btn {
+    padding: 0.5rem 1.25rem; border-radius: 20px; font-weight: 500;
+    border: 1px solid var(--border-default); cursor: pointer; font-size: 0.82rem; font-family: inherit;
+    background: transparent; color: var(--text-secondary);
+    transition: all var(--transition-base);
+  }
+  .eq-action-btn:hover { border-color: rgba(52, 211, 153, 0.3); color: var(--text-primary); background: var(--accent-deep); }
+  .eq-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .eq-action-btn .eq-spinner {
+    display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border-default);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite;
+    vertical-align: middle; margin-left: 0.4rem;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .eq-calc-btn {
+    padding: 0.65rem 1.75rem; border-radius: var(--radius-sm); font-weight: 700;
+    border: none; cursor: pointer; font-size: 0.9rem; font-family: inherit;
+    background: linear-gradient(135deg, var(--accent-dim), #059669); color: #fff;
+    transition: all var(--transition-base);
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+    letter-spacing: 0.01em;
+  }
+  .eq-calc-btn:hover { background: linear-gradient(135deg, #34d399, #10b981); box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35); transform: translateY(-1px); }
+  .eq-calc-btn:active { transform: translateY(0); }
+  .eq-calc-btn:disabled { background: var(--bg-elevated); color: var(--text-muted); cursor: not-allowed; box-shadow: none; transform: none; }
+  .eq-mode-btns { display: flex; gap: 0.5rem; margin-right: 0.75rem; }
+  .eq-mode-btn {
+    padding: 0.4rem 0.85rem; border-radius: 5px; font-size: 0.8rem; font-weight: 600;
+    border: 1px solid var(--border-default); background: transparent; color: var(--text-tertiary);
+    cursor: pointer; font-family: inherit; transition: all var(--transition-base);
+  }
+  .eq-mode-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-deep); }
+  .eq-spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-default);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-left: 0.5rem; vertical-align: middle; }
+
+  /* Custom scrollbar for main page */
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
 
   @media (max-width: 600px) {
     .input-section { flex-direction: column; }
     .container { padding: 1rem; }
-    h1 { font-size: 1.5rem; }
+    h1 { font-size: 1.6rem; }
     th, td { padding: 0.4rem; font-size: 0.8rem; }
     .sub-tabs { gap: 0.15rem; }
     .sub-tab { padding: 0.3rem 0.6rem; font-size: 0.75rem; }
+    .eq-picker { grid-template-columns: repeat(7, 1fr); }
+    .eq-board { flex-wrap: wrap; }
+    .card { padding: 1.15rem; }
+    .tabs { flex-direction: row; }
+    .tab { padding: 0.5rem 0.75rem; font-size: 0.82rem; }
+  }
+
+  /* ===== LIGHT THEME ===== */
+  [data-theme="light"] {
+    --bg-base: #f5f5f0;
+    --bg-surface: rgba(255, 255, 255, 0.85);
+    --bg-elevated: rgba(243, 244, 246, 0.9);
+    --bg-input: rgba(255, 255, 255, 0.95);
+    --border-subtle: rgba(0, 0, 0, 0.06);
+    --border-default: rgba(0, 0, 0, 0.1);
+    --border-strong: rgba(0, 0, 0, 0.16);
+    --border-focus: rgba(5, 150, 105, 0.5);
+    --text-primary: #1f2937;
+    --text-secondary: #4b5563;
+    --text-tertiary: #6b7280;
+    --text-muted: #9ca3af;
+    --accent: #059669;
+    --accent-dim: #047857;
+    --accent-glow: rgba(5, 150, 105, 0.12);
+    --accent-deep: rgba(5, 150, 105, 0.06);
+    --red: #dc2626;
+    --red-dim: rgba(220, 38, 38, 0.08);
+    --yellow: #b45309;
+    --yellow-dim: rgba(180, 83, 9, 0.08);
+    --blue: #2563eb;
+    --blue-dim: rgba(37, 99, 235, 0.07);
+    --purple: #7c3aed;
+    --purple-dim: rgba(124, 58, 237, 0.07);
+    --glass-bg: rgba(255, 255, 255, 0.75);
+    --glass-border: rgba(0, 0, 0, 0.08);
+    --glass-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+
+  [data-theme="light"] body {
+    background: var(--bg-base);
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(5, 150, 105, 0.05) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 60%, rgba(37, 99, 235, 0.03) 0%, transparent 50%);
+  }
+
+  [data-theme="light"] h1 {
+    background: linear-gradient(135deg, #059669 0%, #047857 40%, #065f46 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    filter: drop-shadow(0 0 16px rgba(5, 150, 105, 0.15));
+  }
+
+  [data-theme="light"] .input-section input:focus {
+    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1), 0 0 20px rgba(5, 150, 105, 0.04);
+    background: #fff;
+  }
+
+  [data-theme="light"] tbody tr:nth-child(even) td { background: rgba(0, 0, 0, 0.02); }
+  [data-theme="light"] tbody tr:nth-child(even):hover td { background: rgba(0, 0, 0, 0.04); }
+  [data-theme="light"] tr:hover td { background: rgba(0, 0, 0, 0.03); }
+  [data-theme="light"] .stat-cell .sample { color: #6b7280; }
+
+  [data-theme="light"] .settlement { background: rgba(0, 0, 0, 0.015); border-color: var(--border-subtle); }
+  [data-theme="light"] .settlement:hover { background: rgba(0, 0, 0, 0.03); border-color: var(--border-default); }
+  [data-theme="light"] .settlement .arrow { color: var(--text-muted); }
+
+  [data-theme="light"] .control-row { background: rgba(0, 0, 0, 0.015); }
+  [data-theme="light"] .sub-tabs { background: rgba(0, 0, 0, 0.025); }
+  [data-theme="light"] .sub-tab:hover { background: rgba(0, 0, 0, 0.04); }
+  [data-theme="light"] .tab:hover { background: rgba(0, 0, 0, 0.04); }
+  [data-theme="light"] .hh-sort-bar { background: rgba(0, 0, 0, 0.015); }
+  [data-theme="light"] .upload-zone { background: rgba(0, 0, 0, 0.01); }
+  [data-theme="light"] .upload-zone:hover,
+  [data-theme="light"] .upload-zone.dragover { background: rgba(5, 150, 105, 0.03); }
+  [data-theme="light"] .copy-btn { background: rgba(0, 0, 0, 0.02); }
+  [data-theme="light"] .copy-btn:hover { background: rgba(0, 0, 0, 0.04); }
+
+  [data-theme="light"] .card { backdrop-filter: blur(8px); }
+  [data-theme="light"] .card:hover { border-color: var(--border-default); }
+
+  [data-theme="light"] .hh-overlay { background: rgba(0, 0, 0, 0.4); }
+  [data-theme="light"] .hh-panel {
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 32px 64px -16px rgba(0, 0, 0, 0.15), 0 0 1px rgba(0, 0, 0, 0.1);
+  }
+  [data-theme="light"] .hh-close { background: rgba(0, 0, 0, 0.04); }
+  [data-theme="light"] .hh-close:hover { background: rgba(0, 0, 0, 0.08); }
+  [data-theme="light"] .hh-body::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); }
+  [data-theme="light"] .hh-body::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.25); }
+
+  [data-theme="light"] .eq-picker {
+    background: rgba(255, 255, 255, 0.97);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12), 0 0 1px rgba(0, 0, 0, 0.1);
+  }
+  [data-theme="light"] .eq-picker-card { background: rgba(0, 0, 0, 0.02); }
+  [data-theme="light"] .eq-picker-card:hover { background: rgba(0, 0, 0, 0.06); }
+  [data-theme="light"] .eq-lock-slot { background: rgba(0, 0, 0, 0.03); }
+  [data-theme="light"] .eq-result-bar { box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1); }
+
+  [data-theme="light"] .pc-s { color: #374151; }
+
+  [data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.12); }
+  [data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.2); }
+
+  [data-theme="light"] .btn:disabled { background: var(--bg-elevated); color: var(--text-muted); }
+
+  /* Theme toggle button */
+  .header-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    margin-bottom: 0.3rem;
+  }
+
+  .theme-toggle {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid var(--border-default);
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-base);
+    backdrop-filter: blur(8px);
+    padding: 0;
+  }
+  .theme-toggle:hover {
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+    background: var(--bg-elevated);
+    transform: translateY(-50%) scale(1.05);
+  }
+  .theme-toggle:active {
+    transform: translateY(-50%) scale(0.97);
+  }
+  .theme-toggle svg {
+    width: 18px;
+    height: 18px;
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+  }
+  .theme-toggle .icon-sun,
+  .theme-toggle .icon-moon { position: absolute; }
+
+  [data-theme="dark"] .theme-toggle .icon-sun { opacity: 1; transform: rotate(0deg) scale(1); }
+  [data-theme="dark"] .theme-toggle .icon-moon { opacity: 0; transform: rotate(-90deg) scale(0.5); }
+  [data-theme="light"] .theme-toggle .icon-sun { opacity: 0; transform: rotate(90deg) scale(0.5); }
+  [data-theme="light"] .theme-toggle .icon-moon { opacity: 1; transform: rotate(0deg) scale(1); }
+
+  @media (max-width: 600px) {
+    .theme-toggle { width: 32px; height: 32px; border-radius: 8px; }
+    .theme-toggle svg { width: 16px; height: 16px; }
   }
 </style>
 </head>
 <body>
 <div class="container">
-  <h1>PokerNow Assistant</h1>
+  <div class="header-row">
+    <h1>PokerNow Assistant</h1>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode" aria-label="Toggle light/dark mode">
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5"/>
+        <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+      </svg>
+    </button>
+  </div>
   <p class="subtitle">Ledger, advanced statistics, and winnings graphs</p>
 
   <div class="input-section">
@@ -401,6 +873,7 @@
     <div class="tabs" id="mainTabs">
       <button class="tab active" onclick="switchTab('ledger', this)">Ledger</button>
       <button class="tab" onclick="switchTab('stats', this)">Statistics</button>
+      <button class="tab" onclick="switchTab('equity', this)">Equity</button>
     </div>
 
     <!-- ========== LEDGER TAB ========== -->
@@ -408,7 +881,7 @@
       <div class="card">
         <h2>Game Summary</h2>
         <div class="game-info" id="gameInfo">
-          <div class="stat"><span class="stat-label">Status</span><span class="stat-value" style="color:#64748b">Enter a game URL above</span></div>
+          <div class="stat"><span class="stat-label">Status</span><span class="stat-value" style="color:var(--text-tertiary)">Enter a game URL above</span></div>
         </div>
       </div>
       <div class="card">
@@ -418,7 +891,7 @@
             <th>Player</th><th class="num">Buy-in</th><th class="num">Cash-out</th><th class="num">Net</th>
           </tr></thead>
           <tbody id="ledgerBody">
-            <tr><td colspan="4" style="text-align:center;color:#64748b;padding:1.5rem;">No data yet</td></tr>
+            <tr><td colspan="4" style="text-align:center;color:var(--text-tertiary);padding:1.5rem;">No data yet</td></tr>
           </tbody>
         </table>
         <div id="mergeControls"></div>
@@ -431,7 +904,7 @@
             <span>Copy</span>
           </button>
         </div>
-        <div id="settlements"><p style="color:#64748b">No data yet</p></div>
+        <div id="settlements"><p style="color:var(--text-tertiary)">No data yet</p></div>
       </div>
     </div>
 
@@ -439,7 +912,7 @@
     <div class="tab-content" id="tab-stats">
       <div class="card" id="statsUploadCard">
         <h2>Hand History</h2>
-        <div id="statsSourceInfo" style="display:none;margin-bottom:1rem;color:#94a3b8;font-size:0.85rem;"></div>
+        <div id="statsSourceInfo" style="display:none;margin-bottom:1rem;color:var(--text-secondary);font-size:0.85rem;"></div>
         <input type="file" accept=".csv,.json" id="fileUpload" onchange="uploadFile(this)" style="display:none" />
         <div class="upload-zone" id="uploadZone"
              ondragover="event.preventDefault(); this.classList.add('dragover')"
@@ -488,12 +961,120 @@
       </div>
     </div>
 
+    <!-- ========== EQUITY TAB ========== -->
+    <div class="tab-content" id="tab-equity">
+      <div class="card">
+        <h2>PLO5 Equity Explorer</h2>
+        <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:1rem;">Compare hand categories on a given flop. Pick a board, choose hand types or enter specific cards, then calculate equity.</p>
+
+        <!-- Preset Scenarios -->
+        <div class="eq-presets" id="eqPresets">
+          <span class="eq-preset" onclick="eqLoadPreset('set_vs_nfd')">Set vs NFD</span>
+          <span class="eq-preset" onclick="eqLoadPreset('set_vs_oesd')">Set vs OESD</span>
+          <span class="eq-preset" onclick="eqLoadPreset('set_vs_combo')">Set vs Combo Draw</span>
+          <span class="eq-preset" onclick="eqLoadPreset('set_vs_wrap9')">Set vs 9-Wrap</span>
+          <span class="eq-preset" onclick="eqLoadPreset('set_vs_wrap13')">Set vs 13-Wrap</span>
+          <span class="eq-preset" onclick="eqLoadPreset('set_vs_wrap16')">Set vs 16-Wrap</span>
+          <span class="eq-preset" onclick="eqLoadPreset('set_vs_wrap17')">Set vs 17-Wrap</span>
+          <span class="eq-preset" onclick="eqLoadPreset('set_vs_wrap20')">Set vs 20-Wrap</span>
+          <span class="eq-preset" onclick="eqLoadPreset('set_vs_flush')">Set vs Flush</span>
+          <span class="eq-preset" onclick="eqLoadPreset('trips_vs_fh')">Trips vs FH</span>
+          <span class="eq-preset" onclick="eqLoadPreset('trips_vs_trips')">Trips vs Trips</span>
+          <span class="eq-preset" onclick="eqLoadPreset('overpair_vs_nfd')">Overpair vs NFD</span>
+          <span class="eq-preset" onclick="eqLoadPreset('nfd_vs_oesd')">NFD vs OESD</span>
+          <span class="eq-preset" onclick="eqLoadPreset('straight_vs_flush')">Straight vs Flush</span>
+        </div>
+
+        <!-- Board Picker -->
+        <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.5rem;">
+          <label style="color:var(--text-tertiary);font-size:0.75rem;font-weight:700;letter-spacing:0.06em;">BOARD</label>
+          <div class="eq-mode-btns">
+            <button class="eq-mode-btn active" id="eqStreetFlop" onclick="eqSetStreet('flop')">Flop</button>
+            <button class="eq-mode-btn" id="eqStreetTurn" onclick="eqSetStreet('turn')">Turn</button>
+          </div>
+        </div>
+        <div class="eq-presets" style="margin-bottom:0.5rem;" id="eqPresetBtns"></div>
+        <div class="eq-board" id="eqBoard"></div>
+      </div>
+
+      <!-- Player Rows -->
+      <div class="card" id="eqPlayersCard">
+        <div id="eqPlayers"></div>
+        <button class="eq-preset" style="margin-top:0.5rem;" onclick="eqAddPlayer()">+ Add Player</button>
+      </div>
+
+      <!-- Controls -->
+      <div class="card" style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <div class="eq-mode-btns">
+          <button class="eq-mode-btn active" id="eqModeSingle" onclick="eqSetMode('single')">Single Deal</button>
+          <button class="eq-mode-btn" id="eqModeBulk" onclick="eqSetMode('bulk')">Multiple Trials</button>
+        </div>
+        <label id="eqSamplesLabel" style="color:var(--text-tertiary);font-size:0.8rem;display:none;">
+          Trials: <input type="number" id="eqSamples" value="1" min="1" max="5000" step="100"
+            style="width:70px;padding:0.3rem;background:var(--bg-input);border:1px solid var(--border-default);color:var(--text-primary);border-radius:4px;font-size:0.8rem;font-family:'JetBrains Mono',monospace;">
+        </label>
+        <span style="color:var(--text-muted);font-size:0.7rem;" title="Each matchup uses exact enumeration (all possible runouts)">(exact equity)</span>
+        <label id="eqLockBoardLabel" style="color:var(--text-tertiary);font-size:0.8rem;display:none;align-items:center;gap:0.3rem;cursor:pointer;" title="When unlocked, each trial uses a random board of the same texture. When locked, the same board is used every trial.">
+          <input type="checkbox" id="eqLockBoard" checked style="accent-color:var(--accent);"> Lock board
+        </label>
+        <button class="eq-calc-btn" id="eqCalcBtn" onclick="eqCalculate()" disabled>Calculate Equity</button>
+        <button class="eq-calc-btn" id="eqStopBtn" onclick="eqStopTrials()" style="display:none;background:linear-gradient(135deg,#ef4444,#dc2626);border-color:#b91c1c;">Stop</button>
+        <span id="eqSpinner" style="display:none"><span class="eq-spinner"></span></span>
+        <div id="eqProgress" style="display:none;flex:1;min-width:150px;">
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <div style="flex:1;height:8px;background:var(--bg-base);border-radius:4px;overflow:hidden;">
+              <div id="eqProgressFill" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent-dim));border-radius:4px;transition:width 0.2s;box-shadow:0 0 8px rgba(52,211,153,0.3);"></div>
+            </div>
+            <span id="eqProgressText" style="color:var(--text-secondary);font-size:0.75rem;min-width:50px;font-family:'JetBrains Mono',monospace;">0%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Results -->
+      <div class="card" id="eqResultsCard" style="display:none;">
+        <h2>Results</h2>
+        <div id="eqResultsInfo" style="color:var(--text-tertiary);font-size:0.8rem;margin-bottom:0.5rem;"></div>
+        <div class="eq-result-labels" id="eqResultLabels"></div>
+        <div class="eq-result-bar" id="eqResultBar"></div>
+        <div class="eq-hands-display" id="eqHandsDisplay"></div>
+        <div style="display:flex;gap:0.6rem;margin-top:1rem;">
+          <button class="eq-action-btn" id="eqRerollBtn" style="display:none;" onclick="eqNewHands()">New Hands</button>
+          <button class="eq-action-btn" id="eqNewBoardBtn" style="display:none;" onclick="eqNewBoardClick()">New Board</button>
+          <button class="eq-action-btn" id="eqSaveBtn" style="display:none;" onclick="eqSaveResult()">Save</button>
+        </div>
+      </div>
+
+      <!-- Saved Results -->
+      <div class="card" id="eqSavedCard" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
+          <h2>Saved Results</h2>
+          <button class="eq-preset" onclick="eqClearSaved()" style="font-size:0.7rem;">Clear All</button>
+        </div>
+        <div id="eqSavedList"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
 <script>
 // ===== UTILITIES =====
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function _isLight() { return document.documentElement.getAttribute('data-theme') === 'light'; }
+function _chartColors() {
+  const light = _isLight();
+  return {
+    grid: light ? 'rgba(0,0,0,0.06)' : '#1a2332',
+    tick: light ? '#6b7280' : '#475569',
+    title: light ? '#4b5563' : '#64748b',
+    legend: light ? '#4b5563' : '#94a3b8',
+    tooltipBg: light ? '#ffffff' : '#1e293b',
+    tooltipBorder: light ? '#e5e7eb' : '#334155',
+    tooltipTitle: light ? '#1f2937' : '#e2e8f0',
+    tooltipBody: light ? '#4b5563' : '#94a3b8',
+  };
+}
 
 function switchTab(name, btn) {
   document.querySelectorAll('#mainTabs .tab').forEach(t => t.classList.remove('active'));
@@ -592,7 +1173,7 @@ async function processFile(file) {
     }
     const data = await res.json();
     renderFullStats(data);
-    uploadZone.innerHTML = '<p style="color:#22c55e">Loaded ' + data.totalHands + ' hands from ' + esc(file.name) + '</p><p class="hint">Drop another file to re-analyze</p>';
+    uploadZone.innerHTML = '<p style="color:#22c55e">Loaded ' + (data.totalHands + (data.totalBombPots || 0)) + ' hands from ' + esc(file.name) + '</p><p class="hint">Drop another file to re-analyze</p>';
   } catch (err) {
     uploadZone.innerHTML = '<p class="error">Error: ' + esc(err.message) + '</p><p class="hint">Try again</p>';
   }
@@ -812,14 +1393,14 @@ function renderWinningsChart(winnings) {
       plugins: {
         legend: {
           position: 'top',
-          labels: { color: '#94a3b8', usePointStyle: true, pointStyle: 'line', padding: 12 },
+          labels: { color: _chartColors().legend, usePointStyle: true, pointStyle: 'line', padding: 12 },
         },
         tooltip: {
-          backgroundColor: '#1e293b',
-          borderColor: '#334155',
+          backgroundColor: _chartColors().tooltipBg,
+          borderColor: _chartColors().tooltipBorder,
           borderWidth: 1,
-          titleColor: '#e2e8f0',
-          bodyColor: '#94a3b8',
+          titleColor: _chartColors().tooltipTitle,
+          bodyColor: _chartColors().tooltipBody,
           callbacks: {
             label: ctx => `${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)}`,
           },
@@ -828,15 +1409,15 @@ function renderWinningsChart(winnings) {
       scales: {
         x: {
           display: true,
-          title: { display: true, text: 'Hands', color: '#64748b' },
-          ticks: { color: '#475569', maxTicksLimit: 10 },
-          grid: { color: '#1a2332' },
+          title: { display: true, text: 'Hands', color: _chartColors().title },
+          ticks: { color: _chartColors().tick, maxTicksLimit: 10 },
+          grid: { color: _chartColors().grid },
         },
         y: {
           display: true,
-          title: { display: true, text: 'Net Winnings ($)', color: '#64748b' },
-          ticks: { color: '#475569', callback: v => '$' + v },
-          grid: { color: '#1a2332' },
+          title: { display: true, text: 'Net Winnings ($)', color: _chartColors().title },
+          ticks: { color: _chartColors().tick, callback: v => '$' + v },
+          grid: { color: _chartColors().grid },
         },
       },
     },
@@ -858,7 +1439,7 @@ function renderEV(ev) {
     document.getElementById('evContent').innerHTML = `
       <p style="color:#94a3b8; margin-bottom:1rem;">Monte Carlo equity simulation for all-in hands.</p>
       <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
-        <label style="color:#64748b;font-size:0.85rem;">Trials: <input type="number" id="evTrials" value="100000" min="500" max="500000" step="1000" style="width:80px;padding:0.3rem;background:#0f1117;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:0.85rem;"></label>
+        <label style="color:#64748b;font-size:0.85rem;">Trials: <input type="number" id="evTrials" value="100000" min="500" max="500000" step="1000" style="width:80px;padding:0.3rem;background:var(--bg-input);border:1px solid var(--border-strong);border-radius:4px;color:var(--text-primary);font-size:0.85rem;"></label>
         <button class="btn btn-sm" onclick="computeEV()">Compute All-in EV</button>
         <span style="color:#475569;font-size:0.75rem;">Lower = faster, higher = more accurate</span>
       </div>
@@ -935,7 +1516,7 @@ function renderEV(ev) {
 
   // Recompute controls
   html += `<div style="margin-top:0.75rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
-    <label style="color:#64748b;font-size:0.85rem;">Trials: <input type="number" id="evTrials" value="${_lastEvTrials}" min="500" max="500000" step="1000" style="width:80px;padding:0.3rem;background:#0f1117;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:0.85rem;"></label>
+    <label style="color:#64748b;font-size:0.85rem;">Trials: <input type="number" id="evTrials" value="${_lastEvTrials}" min="500" max="500000" step="1000" style="width:80px;padding:0.3rem;background:var(--bg-input);border:1px solid var(--border-strong);border-radius:4px;color:var(--text-primary);font-size:0.85rem;"></label>
     <button class="btn btn-sm btn-outline" onclick="computeEV()">Recompute</button>
   </div>`;
 
@@ -963,7 +1544,7 @@ async function computeEV() {
       <div style="margin-bottom:0.75rem">
         <span id="evProgressText" style="color:#94a3b8;font-size:0.85rem;">Scanning for all-in hands...</span>
       </div>
-      <div style="width:100%;height:6px;background:#0f1117;border-radius:3px;overflow:hidden;">
+      <div style="width:100%;height:6px;background:var(--bg-input);border-radius:3px;overflow:hidden;">
         <div id="evProgressBar" style="height:100%;width:0%;background:#22c55e;border-radius:3px;transition:width 0.3s;"></div>
       </div>
     </div>`;
@@ -1029,7 +1610,7 @@ const _GT_LABELS = {th:"Hold'em",he:"Hold'em",oh:'Omaha',plo:'PLO',plo5:'PLO5'};
 
 function _pc(card) {
   if (!card || card === '|') return '';
-  const rank = card[0] === 'T' ? '10' : card[0];
+  const rank = card[0];
   const suit = {s:'\u2660',h:'\u2665',d:'\u2666',c:'\u2663'}[card[1]] || card[1];
   const cls = 'pc-' + card[1];
   return `<span class="pc ${cls}">${rank}${suit}</span>`;
@@ -1262,14 +1843,14 @@ function showEvChart(playerName) {
       plugins: {
         legend: {
           position: 'top',
-          labels: { color: '#94a3b8', usePointStyle: true, pointStyle: 'line', padding: 12 },
+          labels: { color: _chartColors().legend, usePointStyle: true, pointStyle: 'line', padding: 12 },
         },
         tooltip: {
-          backgroundColor: '#1e293b',
-          borderColor: '#334155',
+          backgroundColor: _chartColors().tooltipBg,
+          borderColor: _chartColors().tooltipBorder,
           borderWidth: 1,
-          titleColor: '#e2e8f0',
-          bodyColor: '#94a3b8',
+          titleColor: _chartColors().tooltipTitle,
+          bodyColor: _chartColors().tooltipBody,
           callbacks: {
             label: ctx => `${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)}`,
           },
@@ -1278,15 +1859,15 @@ function showEvChart(playerName) {
       scales: {
         x: {
           display: true,
-          title: { display: true, text: 'Hands', color: '#64748b' },
-          ticks: { color: '#475569', maxTicksLimit: 10 },
-          grid: { color: '#1a2332' },
+          title: { display: true, text: 'Hands', color: _chartColors().title },
+          ticks: { color: _chartColors().tick, maxTicksLimit: 10 },
+          grid: { color: _chartColors().grid },
         },
         y: {
           display: true,
-          title: { display: true, text: 'Winnings ($)', color: '#64748b' },
-          ticks: { color: '#475569', callback: v => '$' + v },
-          grid: { color: '#1a2332' },
+          title: { display: true, text: 'Winnings ($)', color: _chartColors().title },
+          ticks: { color: _chartColors().tick, callback: v => '$' + v },
+          grid: { color: _chartColors().grid },
         },
       },
     },
@@ -1639,6 +2220,902 @@ async function fetchGameStats(gameId) {
     info.innerHTML = '<span class="error">Stats: ' + esc(err.message) + '</span>';
     zone.style.display = 'block';
   }
+}
+
+// ===== EQUITY EXPLORER =====
+const EQ_RANKS = ['A','K','Q','J','T','9','8','7','6','5','4','3','2'];
+const EQ_SUITS = ['s','h','d','c'];
+const EQ_PLAYER_COLORS = ['#22c55e','#3b82f6','#f59e0b','#a855f7'];
+let eqStreet = 'flop'; // 'flop' or 'turn'
+let eqBoard = [null, null, null, null];
+let eqPlayers = [
+  {mode: 'category', category: '', hand: [null,null,null,null,null], locks: [null,null,null,null,null], blockers: 0},
+  {mode: 'category', category: '', hand: [null,null,null,null,null], locks: [null,null,null,null,null], blockers: 0},
+];
+let eqMode = 'single';
+let eqCategories = [];
+let eqAbortController = null;
+function eqStopTrials() {
+  if (eqAbortController) { eqAbortController.abort(); eqAbortController = null; }
+  document.getElementById('eqStopBtn').style.display = 'none';
+}
+function eqGetUsedCards(opts) {
+  const used = new Set();
+  eqBoard.forEach(c => { if (c) used.add(c); });
+  eqPlayers.forEach(p => {
+    p.hand.forEach(c => { if (c) used.add(c); });
+    // Skip category locks when picking board cards — they auto-reset on board change
+    if (opts && opts.skipCategoryLocks && p.mode === 'category') return;
+    p.locks.forEach(c => { if (c) used.add(c); });
+  });
+  return used;
+}
+
+function eqBoardSize() { return eqStreet === 'turn' ? 4 : 3; }
+
+function eqSetStreet(street) {
+  eqStreet = street;
+  document.getElementById('eqStreetFlop').classList.toggle('active', street === 'flop');
+  document.getElementById('eqStreetTurn').classList.toggle('active', street === 'turn');
+  // Trim or extend board array
+  if (street === 'flop') {
+    if (eqBoard[3]) eqBoard[3] = null;
+  }
+  eqRenderPresets();
+  eqRenderBoard();
+  eqOnBoardChange();
+}
+
+function eqRenderBoard() {
+  const n = eqBoardSize();
+  const container = document.getElementById('eqBoard');
+  container.innerHTML = '';
+  for (let i = 0; i < n; i++) {
+    const slot = document.createElement('div');
+    slot.className = 'eq-card-slot' + (eqBoard[i] ? ' filled' : '');
+    slot.onclick = function() { eqPickCard(this, 'board', i); };
+    slot.innerHTML = eqBoard[i] ? _pc(eqBoard[i]) : '<span style="color:#475569">+</span>';
+    container.appendChild(slot);
+  }
+}
+
+function eqRenderPlayers() {
+  const container = document.getElementById('eqPlayers');
+  container.innerHTML = eqPlayers.map((p, pi) => {
+    const color = EQ_PLAYER_COLORS[pi];
+    const catOptions = eqCategories.length > 0
+      ? eqCategories.map(c => `<option value="${c.name}" ${!c.possible ? 'disabled' : ''} ${p.category === c.name ? 'selected' : ''}>${c.label}${!c.possible ? ' (N/A)' : ''}</option>`).join('')
+      : '<option value="">Set board first</option>';
+    const catSelect = `<select onchange="eqSetCategory(${pi}, this.value)" style="background:var(--bg-input);border:1px solid var(--border-strong);color:var(--text-primary);padding:0.3rem 0.5rem;border-radius:4px;font-size:0.8rem;">${'<option value="">Choose...</option>' + catOptions}</select>`;
+    const handSlots = p.hand.map((c, ci) =>
+      `<div class="eq-hand-slot ${c ? 'filled' : ''}" onclick="eqPickCard(this,'player',${pi},${ci})">${c ? _pc(c) : '<span style="color:#475569;font-size:0.65rem;">+</span>'}</div>`
+    ).join('');
+    const catInfo = p.category ? eqCategories.find(c => c.name === p.category) : null;
+    const fixedText = catInfo?.fixed
+      ? `<span style="color:#94a3b8;font-size:0.75rem;margin-left:0.4rem;white-space:nowrap;">${catInfo.fixed}</span>` : '';
+    const blockerPool = catInfo?.blocker_cards || [];
+    const isFlushDraw = ['nut_flush_draw','flush_draw','combo_draw'].includes(p.category);
+    const maxBlockers = catInfo?.max_blockers != null
+      ? catInfo.max_blockers
+      : Math.min(Math.max(blockerPool.length - (isFlushDraw ? 1 : 0), 0), 3);
+    const blockers = p.blockers || 0;
+    const blockerControl = p.mode === 'category' && p.category && maxBlockers > 0
+      ? `<div style="display:flex;align-items:center;gap:0.3rem;margin-left:0.5rem;">
+          <span style="color:var(--text-muted);font-size:0.7rem;">Blockers</span>
+          ${[0,1,2,3].filter(n => n <= maxBlockers).map(n =>
+            `<button onclick="eqSetBlockers(${pi},${n})" style="width:22px;height:22px;border-radius:4px;border:1px solid ${blockers===n?'var(--accent)':'var(--border-default)'};background:${blockers===n?'var(--accent)':'transparent'};color:${blockers===n?'var(--bg-base)':'var(--text-secondary)'};font-size:0.7rem;font-weight:700;cursor:pointer;">${n}</button>`
+          ).join('')}
+        </div>` : '';
+    // Determine blocker suit for "x" placeholders
+    const blockerSuit = isFlushDraw && blockerPool.length > 0 ? blockerPool[0][1] : '';
+    const suitSym = {s:'\u2660',h:'\u2665',d:'\u2666',c:'\u2663'};
+    const fixedCount = p.locks.filter(c => c !== null).length;
+    // For flush draws, the required 2nd suited card also shows as "x"
+    const blockerSlots = blockers + (isFlushDraw ? 1 : 0);
+    const lockSlots = [];
+    for (let ci = 0; ci < 5; ci++) {
+      if (ci < fixedCount) {
+        const c = p.locks[ci];
+        lockSlots.push(`<div class="eq-lock-slot filled" onclick="eqPickCard(this,'lock',${pi},${ci})" title="Click to unlock">${_pc(c)}</div>`);
+      } else if (ci < fixedCount + blockerSlots) {
+        const xLabel = blockerSuit ? `<span class="pc pc-${blockerSuit}">x${suitSym[blockerSuit]}</span>` : '<span class="pc" style="color:var(--text-muted)">x</span>';
+        lockSlots.push(`<div class="eq-lock-slot filled" style="border-color:var(--border-default);opacity:0.7;" title="Random blocker (each trial)">${xLabel}</div>`);
+      } else {
+        lockSlots.push(`<div class="eq-lock-slot" onclick="eqPickCard(this,'lock',${pi},${ci})" title="Lock a specific card"><span style="color:#334155;font-size:0.6rem;">🔒</span></div>`);
+      }
+    }
+    const lockRow = p.mode === 'category' && p.category ? `<div class="eq-lock-slots">${lockSlots.join('')}</div>` : '';
+
+    return `<div class="eq-player-row">
+      <div class="eq-player-dot" style="background:${color}"></div>
+      <span style="color:${color};font-size:0.8rem;font-weight:700;min-width:20px;">P${pi+1}</span>
+      <button class="eq-mode-toggle ${p.mode==='category'?'active':''}" onclick="eqToggleMode(${pi},'category')">Category</button>
+      <button class="eq-mode-toggle ${p.mode==='manual'?'active':''}" onclick="eqToggleMode(${pi},'manual')">Manual</button>
+      ${p.mode === 'category' ? catSelect + fixedText + blockerControl + lockRow : `<div class="eq-hand-slots">${handSlots}</div>`}
+      ${pi >= 2 ? `<button style="margin-left:auto;background:none;border:none;color:#64748b;cursor:pointer;font-size:1.1rem;" onclick="eqRemovePlayer(${pi})">×</button>` : ''}
+    </div>`;
+  }).join('');
+  eqUpdateCalcBtn();
+}
+
+function eqToggleMode(pi, mode) {
+  eqPlayers[pi].mode = mode;
+  eqRenderPlayers();
+}
+
+function eqSetCategory(pi, cat) {
+  eqPlayers[pi].category = cat;
+  eqPlayers[pi].locks = [null,null,null,null,null];
+  eqPlayers[pi].blockers = 0;
+  if (cat) eqPrefillLocks(pi);
+  eqRenderPlayers();
+  eqUpdateCalcBtn();
+}
+
+function eqPrefillLocks(pi) {
+  const catInfo = eqCategories.find(c => c.name === eqPlayers[pi].category);
+  if (!catInfo) return;
+  const used = new Set();
+  eqBoard.forEach(c => { if (c) used.add(c); });
+  eqPlayers.forEach((p, i) => { if (i !== pi) p.locks.forEach(c => { if (c) used.add(c); }); });
+  let slot = 0;
+  // Fill fixed cards first
+  if (catInfo.fixed_cards && catInfo.fixed_cards.need) {
+    const {need, options} = catInfo.fixed_cards;
+    if (options.length === 1) {
+      const pool = options[0];
+      for (const card of pool) {
+        if (slot >= need) break;
+        if (!used.has(card)) { eqPlayers[pi].locks[slot++] = card; used.add(card); }
+      }
+    } else {
+      for (const pool of options) {
+        if (slot >= need) break;
+        for (const card of pool) {
+          if (!used.has(card)) { eqPlayers[pi].locks[slot++] = card; used.add(card); break; }
+        }
+      }
+    }
+  }
+  // Blocker cards are NOT locked — they're randomized per trial on the backend
+}
+
+function eqSetBlockers(pi, count) {
+  eqPlayers[pi].blockers = count;
+  eqPlayers[pi].locks = [null,null,null,null,null];
+  eqPrefillLocks(pi);
+  eqRenderPlayers();
+}
+
+function eqAddPlayer() {
+  if (eqPlayers.length >= 4) return;
+  eqPlayers.push({mode: 'category', category: '', hand: [null,null,null,null,null], locks: [null,null,null,null,null], blockers: 0});
+  eqRenderPlayers();
+}
+
+function eqRemovePlayer(pi) {
+  eqPlayers.splice(pi, 1);
+  eqRenderPlayers();
+}
+
+function eqSetMode(mode) {
+  eqMode = mode;
+  document.getElementById('eqModeSingle').classList.toggle('active', mode === 'single');
+  document.getElementById('eqModeBulk').classList.toggle('active', mode === 'bulk');
+  document.getElementById('eqSamples').value = mode === 'bulk' ? 500 : 1;
+  document.getElementById('eqSamplesLabel').style.display = mode === 'bulk' ? '' : 'none';
+  document.getElementById('eqLockBoardLabel').style.display = mode === 'bulk' ? 'flex' : 'none';
+}
+
+const EQ_BOARD_PRESETS = {
+  rainbow: [['Ah','7d','6s'],['9d','6s','3h'],['9c','6h','2s'],['Kh','7c','4s'],['Th','9s','5d'],
+            ['Ts','5d','3c'],['Ks','5c','3d'],['Js','9h','3d'],['Qd','Tc','3s'],['Ah','Jc','8s'],
+            ['Ks','8c','4d'],['Qh','9d','2s'],['Ad','8c','3h'],['Qc','9h','2s'],['Tc','3h','2d'],
+            ['Kd','Jc','2s'],['Ks','5h','2d'],['9d','8c','3s'],['6h','5s','3d'],['Ad','5h','2c'],
+            ['Th','9s','6d'],['As','Th','6d'],['Jc','9d','2s'],['Ks','4d','2c'],['Qc','Ts','5h'],
+            ['Qh','8c','3d'],['Kd','Th','8c'],['Ah','6d','3s'],['Ac','7h','6d'],['Ah','Td','8c'],
+            ['Qd','6c','3s'],['Kd','7h','2s'],['Jc','Ts','2d'],['Qh','6d','4s'],['Kh','6d','3s'],
+            ['Qs','Jh','2c'],['Tc','9s','8h'],['8c','3h','2s'],['Qs','Jh','6d'],['Ts','3c','2d'],
+            ['Kd','9c','4h'],['9c','7h','5d'],['Qs','Jh','8c'],['Qh','Jc','5d'],['Qd','8c','7h'],
+            ['Ad','Qh','5s'],['Qd','7c','4h'],['Ad','9s','6h'],['Qd','Jh','9s'],['6d','4c','2h']],
+  two_tone: [['Kd','8c','3c'],['9h','8c','4c'],['Jh','6d','2d'],['Qd','Js','2s'],['Qs','Jd','6s'],
+             ['9h','4h','3s'],['Ad','7d','3s'],['Kc','8c','2d'],['As','Qd','5s'],['As','3s','2c'],
+             ['9h','8s','6s'],['Js','Ts','5c'],['Td','5h','4d'],['Ac','Ks','Ts'],['As','Qc','9c'],
+             ['Kc','9c','8d'],['7s','4c','3c'],['Kh','7c','6c'],['Ks','5s','2c'],['8s','5c','3c'],
+             ['Kd','6s','5d'],['Kc','Jc','9s'],['Ks','8s','4h'],['9c','7d','2d'],['Tc','8s','6s'],
+             ['9s','7h','4h'],['Ad','6d','3c'],['Kc','6c','4s'],['Kc','7s','4s'],['Ac','Qs','4s'],
+             ['Qc','8c','5s'],['As','7d','3d'],['Ts','6c','5c'],['Js','Ts','3h'],['9s','6h','3h'],
+             ['Ad','9c','3d'],['Ah','Kc','8c'],['Kc','5s','2s'],['Kh','8c','3h'],['Ah','Js','Th'],
+             ['Ks','4s','3h'],['Ad','8d','6s'],['Kh','9c','2c'],['Qh','7s','6s'],['Jd','Ts','2s'],
+             ['9c','8h','5c'],['8d','7h','6d'],['Kd','Qs','6d'],['As','Ts','9c'],['Ac','Qh','2c']],
+  monotone: [['Jc','5c','2c'],['9c','8c','2c'],['Js','7s','6s'],['Ah','Th','2h'],['Ts','8s','6s'],
+             ['8c','7c','5c'],['Qc','Tc','7c'],['As','Js','Ts'],['Kc','Qc','8c'],['8s','5s','2s'],
+             ['Ad','9d','3d'],['Kd','7d','5d'],['Th','9h','5h'],['Td','7d','4d'],['Jh','7h','2h'],
+             ['Ac','8c','4c'],['As','8s','4s'],['Ac','Jc','Tc'],['Kh','5h','4h'],['8h','4h','3h'],
+             ['Th','7h','2h'],['Qs','8s','5s'],['Ac','Qc','2c'],['Ac','Tc','9c'],['Jd','3d','2d'],
+             ['9s','6s','4s'],['Jh','3h','2h'],['9d','7d','3d'],['Ks','8s','3s'],['Jh','Th','5h'],
+             ['Jd','6d','3d'],['9d','8d','7d'],['Kc','Qc','3c'],['Qh','9h','3h'],['6s','3s','2s'],
+             ['9c','7c','2c'],['Th','9h','3h'],['Jc','6c','5c'],['Ts','8s','7s'],['Ac','Kc','4c'],
+             ['Qs','Ts','5s'],['7h','5h','4h'],['Ad','8d','2d'],['7h','4h','3h'],['Ad','Qd','2d'],
+             ['8s','7s','5s'],['As','Qs','7s'],['As','Js','2s'],['Ts','7s','4s'],['9c','4c','2c']],
+  dry:      [['Kh','9d','6s'],['Qc','9s','2d'],['Ah','9d','4c'],['Jd','7c','4h'],['Js','8c','5h'],
+             ['Ad','Jh','7c'],['Qh','8d','2s'],['Kc','Td','6h'],['Qd','9s','5c'],['Ah','8d','5s'],
+             ['9c','6s','2h'],['Ks','7d','3c'],['Jh','8s','2c'],['Ah','Ts','6d'],['Kh','9s','6c'],
+             ['Jh','8d','4s'],['Qc','9d','5s'],['Jd','7c','3s'],['Qs','6c','2h'],['Jh','6s','3d'],
+             ['Ad','9c','2s'],['As','Jc','3h'],['Qc','5h','2d'],['Ac','Td','5h'],['Kc','6d','2s'],
+             ['Jd','8s','5h'],['Jd','7c','3h'],['Jd','7c','2h'],['Ah','Ts','2c'],['Kh','Tc','3s'],
+             ['Kh','Tc','4d'],['Qd','9s','2h'],['Kh','Ts','3d'],['As','Jd','8h'],['Ah','Td','2c'],
+             ['As','8c','2h'],['9s','5d','2h'],['Qd','7c','3s'],['Ad','Js','8h'],['Qc','6d','3s'],
+             ['Jd','7s','2c'],['Kc','9s','5h'],['Qs','5h','2d'],['Qc','8s','4h'],['Qs','9c','2d'],
+             ['Jd','5h','2c'],['As','7c','3d'],['Kh','6d','2s'],['Qs','6h','3c'],['Kd','Th','3c']],
+  wet:      [['9s','7d','6c'],['Qc','Ts','9d'],['5s','4c','3h'],['Jd','9s','8c'],['7h','6s','4c'],
+             ['Ts','9h','8c'],['As','Kd','Qh'],['Qs','Jh','9d'],['Kc','Jh','Td'],['9c','7d','6s'],
+             ['Ah','Kd','Qs'],['Td','9h','8s'],['8d','6s','5c'],['5s','3d','2h'],['Ks','Qc','Jd'],
+             ['8h','7c','5s'],['8s','6c','5h'],['5s','3c','2d'],['6c','5s','4h'],['9s','8c','7h'],
+             ['Ts','9c','8h'],['7h','6d','5s'],['7s','6c','5d'],['5d','4s','2h'],['8h','7s','6c'],
+             ['9s','8h','7c'],['6h','4d','3c'],['9d','8c','7h'],['Qh','Js','Tc'],['Jc','9s','8d'],
+             ['5h','4c','2d'],['5d','4s','3c'],['6s','4h','3c'],['5c','4s','2d'],['Kh','Jd','Tc'],
+             ['Qc','Th','9d'],['8c','7h','5d'],['As','Kc','Qd'],['4s','3c','2d'],['Kc','Qd','Th'],
+             ['Ks','Qd','Jh'],['4d','3h','2c'],['Tc','8h','7s'],['Qh','Jd','Ts'],['4h','3c','2d'],
+             ['Jd','Th','8c'],['Ts','9d','8h'],['Qs','Th','9d'],['Ks','Qh','Jd'],['Qd','Jh','Ts']],
+  top_paired: [['8d','8s','4c'],['Tc','Td','4s'],['Kd','Kh','7c'],['8c','8d','5h'],['9h','9c','6d'],
+               ['Ac','As','8h'],['Ad','As','8c'],['4d','4h','2s'],['8h','8d','4c'],['6h','6s','2c'],
+               ['3c','3s','2d'],['Ad','Ac','Ks'],['6s','6c','5h'],['Ks','Kc','4h'],['As','Ah','Jd'],
+               ['5d','5c','4s'],['9s','9d','5c'],['Ad','Ac','7s'],['9c','9d','3h'],['9c','9d','6s'],
+               ['Td','Tc','3h'],['8d','8s','7c'],['Ac','Ad','7h'],['Jh','Jc','4d'],['Kh','Ks','2d'],
+               ['Kd','Kc','8h'],['Kh','Kd','5s'],['4c','4d','2h'],['9s','9c','6h'],['Ts','Td','5h'],
+               ['Kh','Kc','Td'],['4s','4h','3c'],['8h','8s','3c'],['Th','Td','9s'],['Jd','Js','8c'],
+               ['5d','5c','4h'],['Kh','Kc','4d'],['Kd','Kh','Ts'],['9c','9s','5h'],['Js','Jd','8h'],
+               ['Kh','Kc','5s'],['5h','5s','2d'],['8s','8c','7h'],['Ad','Ah','Js'],['7h','7s','2d'],
+               ['Qc','Qh','4d'],['Kc','Kh','9s'],['Kc','Kh','Ts'],['Jh','Js','2d'],['9h','9c','2d']],
+  bot_paired: [['Jd','6s','6h'],['6h','4s','4d'],['Ts','6d','6h'],['Qh','6c','6d'],['7c','4s','4d'],
+               ['Kh','3s','3c'],['Th','6c','6s'],['Qd','8c','8s'],['Kc','5s','5h'],['Qd','Ts','Tc'],
+               ['Jc','3h','3d'],['Qh','4s','4d'],['7c','2s','2d'],['8s','2h','2d'],['Qc','2s','2h'],
+               ['7s','4c','4h'],['Qd','6c','6h'],['Jd','9s','9h'],['Qd','5c','5s'],['Qh','9d','9c'],
+               ['6s','2d','2c'],['Td','6h','6s'],['Ad','Ts','Tc'],['Tc','7d','7h'],['Qd','2c','2s'],
+               ['Qc','Th','Td'],['Qs','4h','4c'],['Ks','Jh','Jc'],['Jh','2c','2s'],['Jd','Th','Tc'],
+               ['5s','2c','2d'],['Js','Tc','Td'],['9d','2c','2s'],['Ks','4h','4c'],['9d','2h','2c'],
+               ['Js','7c','7h'],['Ac','9d','9s'],['4d','3h','3c'],['8s','2c','2d'],['3s','2d','2h'],
+               ['9c','4s','4d'],['8c','4d','4h'],['8s','6h','6d'],['Qc','Jh','Js'],['4c','3h','3d'],
+               ['4d','3h','3s'],['7d','4h','4s'],['Qd','5h','5s'],['Ac','Td','Th'],['Kd','7c','7h']],
+};
+
+const EQ_TURN_PRESETS = {
+  rainbow: [['As','Jc','8h','5d'],['As','8c','6h','3d'],['Kc','Qs','Jd','8h'],['Ah','Qc','9s','4d'],['8h','7s','6d','2c'],
+            ['As','Th','9c','3d'],['Kh','7c','5s','4d'],['Ah','4s','3d','2c'],['Qc','8d','4h','3s'],['Td','8c','7h','4s'],
+            ['Tc','8h','6d','4s'],['Ah','Ks','Jd','4c'],['Ad','Qh','6s','4c'],['As','9h','6d','5c'],['Jd','Ts','6h','2c'],
+            ['As','Qd','8c','7h'],['9d','8s','7c','2h'],['Kc','7d','5s','3h'],['Ad','9h','8c','3s'],['Ad','Tc','9h','4s'],
+            ['Qc','Jd','6s','4h'],['Kc','8s','7d','5h'],['Kh','Qc','5d','4s'],['Ah','Qd','8s','7c'],['Qh','Tc','6s','4d'],
+            ['Kc','Jh','Ts','9d'],['As','Jd','6c','3h'],['Qc','Jh','Ts','7d'],['9h','8d','6c','4s'],['Ac','Kh','Qs','8d'],
+            ['Jd','9c','8s','6h'],['Tc','9d','5h','3s'],['Qs','7c','3d','2h'],['Qd','8s','6h','4c'],['Kc','Ts','7d','5h'],
+            ['Ks','Qd','8h','5c'],['Qd','7s','6h','3c'],['Ac','Qh','Ts','3d'],['Qs','Tc','8d','2h'],['As','8d','7h','2c'],
+            ['Qh','Td','9c','4s'],['As','Jd','9h','5c'],['Ah','Jc','7s','6d'],['Kh','6d','4c','2s'],['As','Qh','7c','2d'],
+            ['Kc','Qh','6d','2s'],['Th','8d','5s','2c'],['Js','8d','3c','2h'],['Ks','Qh','6d','2c'],['As','Qh','Td','2c']],
+  two_tone: [['Jc','8h','7h','5c'],['Kd','Jh','9h','5d'],['Ah','Kh','9s','4s'],['Ac','Kc','Th','5h'],['As','Jh','9h','7s'],
+             ['As','7d','5s','2d'],['Jd','Th','6d','2h'],['8s','7d','6s','4d'],['Js','7h','5h','4s'],['Tc','8s','5c','4s'],
+             ['Js','7d','6s','5d'],['Qc','8c','7h','3h'],['Ad','Kc','7c','3d'],['Jh','7h','6s','5s'],['Kd','Qs','9s','5d'],
+             ['Kd','6d','3c','2c'],['Ah','Js','Ts','5h'],['Qd','Jd','9c','6c'],['Jc','4s','3s','2c'],['7d','5h','3h','2d'],
+             ['Ad','Kh','6d','4h'],['Ks','8s','4h','3h'],['Ah','6s','3s','2h'],['Jd','9h','6d','5h'],['Qh','9s','6s','4h'],
+             ['Ac','Jd','Td','5c'],['Ad','Jc','4d','2c'],['Kc','8s','3s','2c'],['Kc','6c','5s','3s'],['Qs','Td','5s','4d'],
+             ['8s','7h','6h','5s'],['7c','5c','4d','2d'],['Kd','Jd','9c','4c'],['Ad','Qd','Js','2s'],['Kd','Th','7h','3d'],
+             ['Ad','Ks','Ts','3d'],['Kh','Qs','4h','2s'],['Qs','Jd','8d','7s'],['Ah','Qs','6s','3h'],['Ad','Jh','6d','3h'],
+             ['Kd','Qs','6s','2d'],['Ah','Qs','8s','6h'],['Ad','Qd','9s','3s'],['Ah','Td','7d','3h'],['Ks','5c','3s','2c'],
+             ['Ks','Js','5h','2h'],['Ad','Td','9s','6s'],['Ac','Qh','5h','2c'],['Jd','7d','4c','2c'],['Ah','Qd','8h','6d']],
+  flush_draw: [['Ad','Kh','8d','6d'],['Ah','6c','5h','2h'],['Ad','8d','7h','6d'],['Ac','Kc','4c','2h'],['Ad','Qc','7d','4d'],
+               ['Ah','Jh','Td','8h'],['Ad','Kc','8c','7c'],['Ah','Kh','5h','3d'],['7s','5s','4s','3c'],['9d','8d','6c','5d'],
+               ['Qd','Jc','8d','7d'],['Jc','9c','7c','4h'],['Qd','Jc','Td','9d'],['As','9c','3c','2c'],['Ks','8s','7s','2c'],
+               ['As','Th','8s','2s'],['Ah','7s','6s','2s'],['As','Qh','Js','5s'],['Ah','Kh','Qh','7d'],['Jh','4d','3h','2h'],
+               ['Kd','Qc','9d','4d'],['Ks','Qs','9d','2s'],['Ah','8d','7h','2h'],['Kc','Qc','7c','6s'],['Ks','Ts','9s','3h'],
+               ['Qs','8s','7s','5h'],['Qd','7s','4d','2d'],['Ac','Ks','Js','4s'],['9h','7s','6s','4s'],['Jh','7h','6h','5s'],
+               ['As','Jh','Th','3h'],['Js','8h','7h','4h'],['9h','8d','6h','5h'],['9s','7s','5h','3s'],['Qh','8s','3h','2h'],
+               ['Ad','Kd','3h','2d'],['Ah','Jd','8h','2h'],['Ac','7d','4d','3d'],['Ac','Ks','Qs','5s'],['Jd','9c','6c','3c'],
+               ['Ah','9s','4h','3h'],['Ah','Jh','6h','3s'],['Kd','Qd','Jd','9c'],['Kd','Td','9d','4h'],['Kh','Qh','4c','3h'],
+               ['Js','Ts','8s','6d'],['Ah','Jc','3h','2h'],['Qc','9c','7c','4s'],['Kh','Qh','6h','5c'],['Kc','Jd','9d','4d']],
+  monotone: [['Jc','6c','5c','2c'],['Kc','7c','6c','2c'],['Ad','Jd','Td','4d'],['Th','8h','4h','3h'],['Ts','7s','5s','4s'],
+             ['As','Ts','9s','3s'],['Jc','Tc','8c','6c'],['As','Js','Ts','9s'],['Ad','Jd','9d','3d'],['Ks','7s','5s','3s'],
+             ['Qd','5d','4d','3d'],['Ac','Kc','Jc','5c'],['Ac','6c','5c','2c'],['Qh','9h','6h','2h'],['Qc','Jc','5c','3c'],
+             ['Jh','Th','8h','4h'],['Js','8s','6s','5s'],['Ah','9h','7h','3h'],['Qc','Tc','5c','3c'],['Th','9h','6h','5h'],
+             ['Kc','Jc','Tc','7c'],['Ac','Jc','7c','4c'],['Ac','Kc','5c','4c'],['Ac','9c','7c','6c'],['Js','Ts','7s','3s'],
+             ['Qs','Ts','9s','5s'],['Qs','Ts','9s','8s'],['Qc','9c','5c','3c'],['Qs','9s','5s','2s'],['Qh','Th','8h','5h'],
+             ['Qc','7c','5c','4c'],['As','Ks','Qs','7s'],['As','Qs','Js','9s'],['Ac','Tc','8c','5c'],['Ad','Kd','4d','2d'],
+             ['Td','7d','6d','5d'],['9c','6c','5c','3c'],['Js','8s','7s','4s'],['Jd','Td','3d','2d'],['Ts','9s','6s','2s'],
+             ['Kc','9c','6c','4c'],['7c','6c','5c','2c'],['As','Ks','Js','8s'],['Jh','9h','5h','3h'],['9s','7s','5s','4s'],
+             ['Ah','Th','9h','3h'],['Th','8h','4h','2h'],['Qs','6s','5s','4s'],['Ah','9h','7h','6h'],['Js','9s','8s','6s']],
+  dry:      [['Kh','Ts','6c','3d'],['Qd','9c','6s','3h'],['Ah','Jc','8s','3d'],['Ad','Jc','8h','5s'],['Ah','Tc','7s','2d'],
+             ['Ac','Td','6s','3h'],['Ks','9c','5h','2d'],['Kd','Ts','5h','2c'],['Kh','Tc','5s','2d'],['Qs','9h','5c','2d'],
+             ['As','Jd','8c','2h'],['Ah','Jd','7c','2s'],['Qc','9h','5s','2d'],['Ac','Ts','7h','4d'],['Ac','9h','5s','2d'],
+             ['Ac','Js','5h','2d'],['Kd','Ts','7h','3c'],['Jd','8s','5c','2h'],['Ah','Js','8c','5d'],['Ac','9d','5h','2s'],
+             ['Ah','Td','6s','2c'],['Ah','Jc','8s','4d'],['Ac','Jh','7s','3d'],['Ks','8h','5d','2c'],['Qd','8c','5s','2h'],
+             ['Kh','Ts','7d','3c'],['As','9d','6h','3c'],['Ks','Tc','7d','2h'],['Ad','Jh','5s','2c'],['Qh','9s','6c','2d'],
+             ['Ks','Tc','7h','4d'],['Kc','9h','5d','2s'],['Qd','9s','5h','2c'],['Qs','9c','6d','3h'],['As','Jd','6h','2c'],
+             ['As','Jc','8d','3h'],['Qc','9s','6d','3h'],['Ac','Th','7d','4s'],['Ad','Js','8c','5h'],['Qc','8h','5d','2s'],
+             ['Ac','9h','6d','2s'],['As','Jc','6d','3h'],['Ad','Jc','8h','3s'],['Qs','9d','5c','2h'],['Qs','9d','6h','2c'],
+             ['As','Jh','8d','4c'],['Ah','Jd','8c','3s'],['Ks','Th','6c','2d'],['Kh','Ts','7d','4c'],['Kc','Td','6h','2s']],
+  wet:      [['8d','7h','5s','4c'],['Tc','8d','7s','6h'],['6h','4c','3s','2d'],['Kd','Jc','Ts','9h'],['Qh','Jd','9s','8c'],
+             ['Qs','Jc','Th','8d'],['6h','4c','3d','2s'],['8s','7d','6c','5h'],['Qc','Jd','Ts','9h'],['6h','5c','3d','2s'],
+             ['Th','8s','7d','6c'],['8c','6s','5d','4h'],['Ac','Ks','Qd','Th'],['Kh','Qd','Jc','Ts'],['7d','6s','5c','3h'],
+             ['7h','6s','5c','3d'],['9s','8c','7d','6h'],['Qc','Jh','Ts','9d'],['9c','8h','7d','6s'],['Js','Tc','9d','7h'],
+             ['7h','5s','4d','3c'],['6s','5c','3h','2d'],['Ac','Kh','Qd','Ts'],['7d','5s','4c','3h'],['7c','6s','4d','3h'],
+             ['Ac','Kh','Qs','Td'],['As','Kh','Jc','Td'],['7c','6h','4d','3s'],['Ad','Kh','Js','Tc'],['Qs','Jd','Tc','9h'],
+             ['8s','7c','5h','4d'],['Tc','9h','7d','6s'],['Ah','Kd','Qs','Jc'],['Kc','Qs','Jd','Th'],['Ad','Kc','Js','Th'],
+             ['5h','4c','3d','2s'],['Ah','Ks','Qd','Tc'],['Qd','Jc','9s','8h'],['9c','8h','6d','5s'],['Jd','Tc','8s','7h'],
+             ['Ac','Kd','Js','Th'],['Tc','8s','7d','6h'],['Qc','Ts','9h','8d'],['Kc','Qh','Js','9d'],['9s','8c','6h','5d'],
+             ['Ks','Qc','Jh','9d'],['8s','7c','6d','4h'],['Tc','9d','8h','6s'],['Kh','Jd','Tc','9s'],['Jh','Td','9c','8s']],
+  top_paired: [['Qc','Qd','Jd','8h'],['Jd','Js','Td','6s'],['8d','8c','7h','4s'],['Td','Tc','9h','6c'],['Ah','Ad','6s','4h'],
+               ['8d','8c','7s','2h'],['9s','9d','5c','2d'],['Ac','As','Tc','6h'],['Ah','As','Js','5h'],['Qs','Qd','Th','5d'],
+               ['Ah','Ac','9c','5d'],['9d','9c','7c','6h'],['Ah','Ad','Kc','Th'],['Qd','Qc','8d','6c'],['Qc','Qh','8h','5s'],
+               ['Tc','Th','7s','4d'],['Jc','Jh','3d','2h'],['Js','Jd','Th','6s'],['Qd','Qc','Jc','5h'],['Th','Td','7s','3c'],
+               ['Ts','Td','8h','3s'],['Ad','Ac','4s','2c'],['Jc','Jh','4s','3h'],['Js','Jc','9h','5c'],['Kh','Kc','Jc','Th'],
+               ['Qh','Qd','Js','7h'],['Ac','As','Qd','5h'],['Js','Jh','5d','3c'],['Jc','Jd','7s','2h'],['Ac','Ah','Kc','6d'],
+               ['Td','Th','9s','5h'],['Ks','Kc','Jd','5h'],['Kc','Kd','Js','6h'],['Ac','As','9h','4c'],['Ah','As','Th','2c'],
+               ['Qh','Qs','6d','5c'],['Kh','Ks','7h','5d'],['Th','Tc','4h','3d'],['Kc','Kd','Tc','2d'],['Td','Ts','6d','4h'],
+               ['Kh','Kd','Qs','9h'],['Ad','Ah','5d','4c'],['As','Ac','Jc','2s'],['As','Ac','9h','8d'],['Jh','Js','4h','2d'],
+               ['Kc','Ks','Jh','5d'],['7d','7c','5s','2c'],['7h','7s','6d','3h'],['Ah','Ad','Jh','3s'],['Qh','Qc','5s','2c']],
+  bot_paired: [['6h','5d','4c','4h'],['Jd','9c','7c','7d'],['Kc','8d','2d','2c'],['Qs','9h','6h','6d'],['Kc','Js','3h','3s'],
+               ['Qc','Td','3d','3s'],['Kc','9s','7c','7d'],['Qc','Ts','8h','8c'],['Td','6h','5c','5s'],['Ah','Ts','8c','8d'],
+               ['Ts','4c','2c','2s'],['Th','8c','7d','7s'],['Ac','8s','6s','6c'],['Kd','8h','3d','3c'],['Qs','Jd','3d','3h'],
+               ['8c','7s','5h','5d'],['Kc','Js','8h','8s'],['Qh','8s','7h','7s'],['Kc','Jh','Ts','Td'],['Jd','Th','8s','8c'],
+               ['Tc','9s','6d','6h'],['6d','5c','3c','3h'],['Kc','Jh','Ts','Th'],['8c','5h','3h','3c'],['Tc','5d','3d','3h'],
+               ['Ad','Th','5c','5h'],['9s','8d','2s','2c'],['4s','3c','2c','2d'],['Ah','5s','4d','4s'],['Qs','6d','4h','4d'],
+               ['Kc','4d','3h','3c'],['Qc','6s','5c','5s'],['Jd','Ts','9s','9h'],['Ah','Kd','6s','6h'],['As','6h','2c','2h'],
+               ['Js','5h','3h','3d'],['9d','7h','2s','2h'],['Ad','Qs','2h','2d'],['Td','9s','7d','7s'],['9h','4d','3h','3d'],
+               ['Kh','4d','2h','2c'],['Td','5s','3d','3c'],['Js','7h','6d','6c'],['Ac','Kd','Th','Td'],['Ks','Jh','5c','5h'],
+               ['Ks','7c','5h','5s'],['Kd','8h','3s','3c'],['Kd','Jh','2d','2h'],['8s','6c','2s','2d'],['8h','7d','3d','3h']],
+  double_paired: [['Kh','Kd','4d','4h'],['Tc','Td','9d','9h'],['Ks','Kc','3d','3c'],['Td','Ts','6c','6h'],['As','Ad','5c','5h'],
+                  ['Tc','Ts','9c','9s'],['9c','9d','4h','4d'],['Jc','Js','2s','2c'],['Kc','Kd','4h','4c'],['Js','Jh','2h','2s'],
+                  ['Jd','Jh','5h','5d'],['Js','Jc','8s','8c'],['Kc','Kd','2d','2h'],['6s','6c','2c','2d'],['Qh','Qs','5d','5s'],
+                  ['Js','Jc','5c','5s'],['7h','7c','4s','4d'],['Kh','Kc','Th','Tc'],['Qh','Qc','7s','7h'],['Jc','Js','9s','9c'],
+                  ['Qh','Qd','6d','6s'],['Ad','As','Qd','Qh'],['Jc','Js','3c','3d'],['5d','5h','3c','3s'],['7s','7h','2s','2c'],
+                  ['Kc','Kd','8d','8s'],['Jc','Jd','2h','2c'],['Ad','Ah','7s','7c'],['Qs','Qh','3s','3h'],['Ac','Ad','4d','4s'],
+                  ['Qh','Qc','Td','Ts'],['Qs','Qc','6s','6d'],['8h','8d','2d','2s'],['Ks','Kh','8s','8c'],['Jd','Js','8s','8h'],
+                  ['Ks','Kd','Td','Tc'],['4c','4s','2c','2d'],['7c','7h','3s','3d'],['9c','9d','8h','8c'],['9c','9h','4s','4h'],
+                  ['Qh','Qd','3s','3d'],['Kc','Ks','Th','Td'],['9d','9h','8c','8d'],['Kh','Kd','Qs','Qd'],['Js','Jh','4c','4d'],
+                  ['Qs','Qc','7s','7h'],['9s','9h','2c','2d'],['9h','9d','3c','3d'],['Ad','As','Th','Ts'],['Ts','Td','4d','4c']],
+};
+
+const EQ_PRESET_LABELS = {
+  rainbow: 'Rainbow', two_tone: 'Two-tone', flush_draw: 'Flush Draw',
+  monotone: 'Monotone', dry: 'Dry', wet: 'Wet',
+  top_paired: 'Top Paired', bot_paired: 'Bottom Paired', double_paired: 'Double Paired',
+};
+
+function eqRenderPresets() {
+  const container = document.getElementById('eqPresetBtns');
+  const presets = eqStreet === 'turn' ? EQ_TURN_PRESETS : EQ_BOARD_PRESETS;
+  container.innerHTML = Object.keys(presets).map(k =>
+    `<span class="eq-preset" onclick="eqLoadBoard('${k}')">${EQ_PRESET_LABELS[k] || k}</span>`
+  ).join('');
+}
+
+function eqLoadBoard(texture) {
+  const presets = eqStreet === 'turn' ? EQ_TURN_PRESETS : EQ_BOARD_PRESETS;
+  const options = presets[texture];
+  if (!options) return;
+  const board = options[Math.floor(Math.random() * options.length)];
+  if (eqStreet === 'turn') {
+    eqBoard = [board[0], board[1], board[2], board[3]];
+  } else {
+    eqBoard = [board[0], board[1], board[2], null];
+  }
+  eqPlayers.forEach(p => { p.hand = [null,null,null,null,null]; p.locks = [null,null,null,null,null]; });
+  eqOnBoardChange();
+}
+
+function eqPickCard(slotEl, target, idx1, idx2) {
+  // Close any open picker and clean up listener
+  document.querySelectorAll('.eq-picker').forEach(p => p.remove());
+  if (window._eqPickerClose) { document.removeEventListener('click', window._eqPickerClose); window._eqPickerClose = null; }
+  // Clicking a filled lock slot clears it
+  if (target === 'lock' && eqPlayers[idx1].locks[idx2]) {
+    eqPlayers[idx1].locks[idx2] = null;
+    eqRenderPlayers();
+    return;
+  }
+  const picker = document.createElement('div');
+  picker.className = 'eq-picker';
+
+  // For lock mode, update slot visuals inline without full re-render
+  function updateLockSlotVisuals() {
+    const lockContainer = slotEl.closest('.eq-lock-slots') || slotEl.parentElement;
+    if (!lockContainer) return;
+    const slots = lockContainer.querySelectorAll('.eq-lock-slot');
+    const locks = eqPlayers[idx1].locks;
+    slots.forEach((s, i) => {
+      s.className = 'eq-lock-slot' + (locks[i] ? ' filled' : '');
+      s.innerHTML = locks[i] ? _pc(locks[i]) : '<span style="color:#334155;font-size:0.6rem;">🔒</span>';
+    });
+    // Reposition picker to current target slot
+    if (slots[idx2]) {
+      const r = slots[idx2].getBoundingClientRect();
+      picker.style.left = r.left + 'px';
+      picker.style.top = (r.bottom + 8) + 'px';
+    }
+  }
+
+  function renderPickerCards() {
+    picker.innerHTML = '';
+    // For board picks, ignore category locks (they auto-reset on board change)
+    const currentUsed = target === 'board' ? eqGetUsedCards({skipCategoryLocks: true}) : eqGetUsedCards();
+    EQ_SUITS.forEach(suit => {
+      EQ_RANKS.forEach(rank => {
+        const card = rank + suit;
+        const btn = document.createElement('div');
+        btn.className = 'eq-picker-card' + (currentUsed.has(card) ? ' used' : '');
+        btn.innerHTML = _pc(card);
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          if (target === 'board') {
+            eqBoard[idx1] = card;
+            slotEl.innerHTML = _pc(card);
+            slotEl.classList.add('filled');
+            closePicker();
+            eqOnBoardChange();
+          } else if (target === 'lock') {
+            eqPlayers[idx1].locks[idx2] = card;
+            updateLockSlotVisuals();
+            // Advance to next empty lock slot
+            const locks = eqPlayers[idx1].locks;
+            let nextSlot = -1;
+            for (let i = 0; i < 5; i++) { if (!locks[i]) { nextSlot = i; break; } }
+            if (nextSlot >= 0) {
+              idx2 = nextSlot;
+              renderPickerCards();
+            } else {
+              closePicker();
+            }
+          } else {
+            eqPlayers[idx1].hand[idx2] = card;
+            closePicker();
+            eqOnBoardChange();
+            eqRenderPlayers();
+          }
+        };
+        picker.appendChild(btn);
+      });
+    });
+  }
+
+  function closePicker() {
+    picker.remove();
+    if (window._eqPickerClose) { document.removeEventListener('click', window._eqPickerClose); window._eqPickerClose = null; }
+    if (target === 'lock') eqRenderPlayers();
+  }
+
+  renderPickerCards();
+  document.body.appendChild(picker);
+  // Position picker below the slot, flip upward if it would overflow
+  const slotRect = slotEl.getBoundingClientRect();
+  picker.style.left = slotRect.left + 'px';
+  picker.style.top = (slotRect.bottom + 8) + 'px';
+  requestAnimationFrame(() => {
+    const pickerRect = picker.getBoundingClientRect();
+    if (pickerRect.bottom > window.innerHeight) {
+      picker.style.top = Math.max(0, slotRect.top - pickerRect.height - 8) + 'px';
+    }
+    if (pickerRect.right > window.innerWidth) {
+      picker.style.left = Math.max(0, window.innerWidth - pickerRect.width - 8) + 'px';
+    }
+  });
+  setTimeout(() => {
+    window._eqPickerClose = (e) => {
+      if (!picker.contains(e.target) && !e.target.closest('.eq-lock-slot')) closePicker();
+    };
+    document.addEventListener('click', window._eqPickerClose);
+  }, 0);
+}
+
+async function eqOnBoardChange() {
+  eqRenderBoard();
+  // Fetch categories if all required board slots are filled
+  const n = eqBoardSize();
+  const activeBoard = eqBoard.slice(0, n).filter(c => c !== null);
+  if (activeBoard.length === n) {
+    try {
+      const res = await fetch('/api/equity/categories', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({board: activeBoard}),
+      });
+      const data = await res.json();
+      eqCategories = data.categories || [];
+    } catch (e) { eqCategories = []; }
+    // Reset and re-prefill locks for all category players since the board changed
+    eqPlayers.forEach((p, pi) => {
+      if (p.mode === 'category' && p.category) {
+        p.locks = [null,null,null,null,null];
+        eqPrefillLocks(pi);
+      }
+    });
+    eqRenderPlayers();
+  }
+  eqUpdateCalcBtn();
+}
+
+function eqUpdateCalcBtn() {
+  const btn = document.getElementById('eqCalcBtn');
+  const n = eqBoardSize();
+  const boardReady = eqBoard.slice(0, n).every(c => c !== null);
+  const playersReady = eqPlayers.every(p =>
+    p.mode === 'category' ? p.category !== '' : p.hand.every(c => c !== null)
+  );
+  btn.disabled = !(boardReady && playersReady);
+}
+
+async function eqCalculate() {
+  // Abort any in-flight request
+  if (eqAbortController) { eqAbortController.abort(); eqAbortController = null; }
+  eqAbortController = new AbortController();
+  const signal = eqAbortController.signal;
+
+  const btn = document.getElementById('eqCalcBtn');
+  const stopBtn = document.getElementById('eqStopBtn');
+  const spinner = document.getElementById('eqSpinner');
+  const progressEl = document.getElementById('eqProgress');
+  const progressFill = document.getElementById('eqProgressFill');
+  const progressText = document.getElementById('eqProgressText');
+  btn.disabled = true;
+
+  const players = eqPlayers.map(p => {
+    if (p.mode === 'manual') return {hand: p.hand, label: 'Custom'};
+    const cat = eqCategories.find(c => c.name === p.category);
+    const locked = p.locks.filter(c => c !== null);
+    const result = {category: p.category, label: cat ? cat.label : p.category};
+    if (locked.length > 0) result.locked = locked;
+    // Send blocker info so backend can randomize per trial
+    const blockerPool = cat?.blocker_cards || [];
+    if (blockerPool.length > 0) {
+      result.blocker_pool = blockerPool;
+      result.blockers = p.blockers || 0;
+    }
+    return result;
+  });
+
+  const payload = {
+    board: eqBoard.slice(0, eqBoardSize()).filter(c => c !== null),
+    players: players,
+    mode: eqMode,
+    samples: parseInt(document.getElementById('eqSamples').value) || 500,
+    lock_board: document.getElementById('eqLockBoard').checked,
+  };
+
+  if (eqMode === 'bulk') {
+    // SSE streaming for bulk mode
+    progressEl.style.display = 'block';
+    progressFill.style.width = '0%';
+    progressText.textContent = '0%';
+    spinner.style.display = 'none';
+    stopBtn.style.display = 'inline-block';
+
+    try {
+      const res = await fetch('/api/equity/explore', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
+        signal,
+      });
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, {stream: true});
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = JSON.parse(line.slice(6));
+          if (data.error) throw new Error(data.error);
+          if (data.progress) {
+            const pct = Math.round((data.progress / data.total) * 100);
+            progressFill.style.width = pct + '%';
+            progressText.textContent = `${data.progress}/${data.total}`;
+          }
+          if (data.done) {
+            progressFill.style.width = '100%';
+            progressText.textContent = 'Done';
+            eqRenderResults(data);
+          }
+        }
+      }
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        progressText.textContent = 'Stopped';
+        stopBtn.style.display = 'none';
+        setTimeout(() => { progressEl.style.display = 'none'; }, 1500);
+        btn.disabled = false; eqUpdateCalcBtn(); return;
+      }
+      document.getElementById('eqResultsCard').style.display = 'block';
+      document.getElementById('eqResultBar').innerHTML = '';
+      document.getElementById('eqResultLabels').innerHTML = `<span class="error">${esc(e.message)}</span>`;
+      document.getElementById('eqHandsDisplay').innerHTML = '';
+      document.getElementById('eqResultsInfo').innerHTML = '';
+    }
+    stopBtn.style.display = 'none';
+    setTimeout(() => { progressEl.style.display = 'none'; }, 1000);
+  } else {
+    // Simple fetch for single mode
+    spinner.style.display = 'inline';
+    try {
+      const res = await fetch('/api/equity/explore', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
+        signal,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Server returned ${res.status}`);
+      }
+      const data = await res.json();
+      eqRenderResults(data);
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+      document.getElementById('eqResultsCard').style.display = 'block';
+      document.getElementById('eqResultBar').innerHTML = '';
+      document.getElementById('eqResultLabels').innerHTML = `<span class="error">${esc(e.message)}</span>`;
+      document.getElementById('eqHandsDisplay').innerHTML = '';
+      document.getElementById('eqResultsInfo').innerHTML = '';
+    }
+    spinner.style.display = 'none';
+  }
+  btn.disabled = false;
+  eqUpdateCalcBtn();
+}
+
+let eqLastResult = null;
+
+function eqRenderResults(data) {
+  eqLastResult = data;
+  const card = document.getElementById('eqResultsCard');
+  card.style.display = 'block';
+  document.getElementById('eqSaveBtn').style.display = 'inline-block';
+
+  // Info line
+  const info = document.getElementById('eqResultsInfo');
+  if (data.mode === 'bulk') {
+    info.textContent = `Averaged over ${data.samples_run} trials (exact equity per trial)`;
+  } else {
+    info.textContent = `Single deal (exact equity — all runouts)`;
+  }
+
+  // Labels
+  const labels = document.getElementById('eqResultLabels');
+  labels.innerHTML = data.players.map((p, i) => {
+    const color = EQ_PLAYER_COLORS[i];
+    const eq = p.equity.toFixed(1);
+    const extra = p.std_dev ? ` <span style="color:#64748b;font-size:0.75rem;">\u00b1${p.std_dev}%</span>` : '';
+    return `<span class="eq-result-label" style="color:${color}">${esc(p.label)}: ${eq}%${extra}</span>`;
+  }).join('');
+
+  // Bar
+  const bar = document.getElementById('eqResultBar');
+  bar.innerHTML = data.players.map((p, i) => {
+    const color = EQ_PLAYER_COLORS[i];
+    return `<div style="width:${p.equity}%;background:${color}">${p.equity >= 10 ? p.equity.toFixed(1) + '%' : ''}</div>`;
+  }).join('');
+
+  // Board + hands display
+  const handsEl = document.getElementById('eqHandsDisplay');
+  const rerollBtn = document.getElementById('eqRerollBtn');
+  const displayBoard = data.board || eqBoard.slice(0, eqBoardSize()).filter(c => c);
+  const boardLine = `<div style="margin-bottom:0.5rem;"><span style="color:#64748b;font-weight:600;font-size:0.8rem;">Board:</span> ${_cards(displayBoard)}</div>`;
+  if (data.hands) {
+    let html = boardLine + data.hands.map((h, i) => {
+      const color = EQ_PLAYER_COLORS[i];
+      return `<div style="margin:0.3rem 0;"><span style="color:${color};font-weight:700;">P${i+1}:</span> ${_cards(h)}</div>`;
+    }).join('');
+
+    // River outs for turn boards
+    if (data.river_outs && data.river_outs.length) {
+      const groups = {};
+      data.river_outs.forEach(o => {
+        const k = o.winner === -1 ? 'chop' : o.winner;
+        if (!groups[k]) groups[k] = [];
+        groups[k].push(o.card);
+      });
+      html += `<div style="margin-top:0.8rem;border-top:1px solid var(--border);padding-top:0.6rem;">`;
+      html += `<div style="color:#64748b;font-weight:600;font-size:0.8rem;margin-bottom:0.4rem;">River outs (${data.river_outs.length} cards):</div>`;
+      data.players.forEach((p, i) => {
+        const cards = groups[i] || [];
+        if (!cards.length) return;
+        const color = EQ_PLAYER_COLORS[i];
+        html += `<div style="margin:0.3rem 0;"><span style="color:${color};font-weight:700;">P${i+1} wins (${cards.length}):</span> ${_cards(cards)}</div>`;
+      });
+      const chopCards = groups.chop || [];
+      html += `<div style="margin:0.3rem 0;"><span style="color:#f59e0b;font-weight:700;">Chop (${chopCards.length}):</span> ${chopCards.length ? _cards(chopCards) : '<span style="color:#64748b;font-size:0.8rem;">none</span>'}</div>`;
+      html += `</div>`;
+    }
+
+    handsEl.innerHTML = html;
+    rerollBtn.style.display = 'inline-block';
+    document.getElementById('eqNewBoardBtn').style.display = 'inline-block';
+  } else {
+    handsEl.innerHTML = boardLine;
+    rerollBtn.style.display = 'none';
+    document.getElementById('eqNewBoardBtn').style.display = 'none';
+  }
+}
+
+// ===== SAVED RESULTS =====
+function eqGetSaved() {
+  try { return JSON.parse(localStorage.getItem('eqSavedResults') || '[]'); } catch { return []; }
+}
+
+function eqSaveResult() {
+  if (!eqLastResult) return;
+  const saved = eqGetSaved();
+  const board = eqLastResult.board || eqBoard.slice(0, eqBoardSize()).filter(c => c);
+  const label = eqLastResult.players.map(p => p.label).join(' vs ');
+  const blockerInfo = eqPlayers.map(p => p.blockers || 0);
+  saved.unshift({
+    id: Date.now(),
+    label,
+    board,
+    players: eqLastResult.players,
+    mode: eqLastResult.mode,
+    samples: eqLastResult.samples_run,
+    blockers: blockerInfo,
+    date: new Date().toLocaleDateString(),
+  });
+  localStorage.setItem('eqSavedResults', JSON.stringify(saved));
+  eqRenderSaved();
+}
+
+function eqDeleteSaved(id) {
+  const saved = eqGetSaved().filter(s => s.id !== id);
+  localStorage.setItem('eqSavedResults', JSON.stringify(saved));
+  eqRenderSaved();
+}
+
+function eqClearSaved() {
+  localStorage.removeItem('eqSavedResults');
+  eqRenderSaved();
+}
+
+function eqRenderSaved() {
+  const saved = eqGetSaved();
+  const card = document.getElementById('eqSavedCard');
+  const list = document.getElementById('eqSavedList');
+  if (!saved.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  list.innerHTML = saved.map(s => {
+    const boardHtml = _cards(s.board);
+    const equities = s.players.map((p, i) => {
+      const color = EQ_PLAYER_COLORS[i];
+      const ci = s.mode === 'bulk' && p.std_dev ? ` <span style="color:#64748b;font-size:0.7rem;">\u00b1${p.std_dev}%</span>` : '';
+      return `<span style="color:${color};font-weight:700;">${esc(p.label)}: ${p.equity.toFixed(1)}%${ci}</span>`;
+    }).join('<span style="color:var(--text-muted);margin:0 0.4rem;">vs</span>');
+    const bar = s.players.map((p, i) =>
+      `<div style="width:${p.equity}%;background:${EQ_PLAYER_COLORS[i]};height:6px;"></div>`
+    ).join('');
+    const meta = s.mode === 'bulk' ? `${s.samples} trials` : 'single deal';
+    const blockerStr = s.blockers && s.blockers.some(b => b > 0) ? ` · blockers: ${s.blockers.join('/')}` : '';
+    return `<div style="padding:0.6rem 0;border-bottom:1px solid var(--border-subtle);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.3rem;">
+        <div style="font-size:0.8rem;">${equities}</div>
+        <button onclick="eqDeleteSaved(${s.id})" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.9rem;" title="Delete">&times;</button>
+      </div>
+      <div style="display:flex;border-radius:3px;overflow:hidden;margin-bottom:0.3rem;">${bar}</div>
+      <div style="font-size:0.7rem;color:var(--text-muted);">${boardHtml} · ${meta}${blockerStr} · ${s.date}</div>
+    </div>`;
+  }).join('');
+}
+
+// Load saved results on init
+eqRenderSaved();
+
+// Preset scenarios — each has multiple boards to pick from randomly
+const EQ_PRESETS = {
+  set_vs_nfd: {boards:[['Ks','9s','5d'],['Qs','8s','3d'],['Jh','7h','4d'],['Th','7h','3d'],['Kd','8d','3s'],['Js','5s','2d'],['Qh','6h','3c'],['Td','6d','3h'],['Kc','9c','5h'],['Qd','7d','2s']],
+    players:[{mode:'category',category:'top_set'},{mode:'category',category:'nut_flush_draw'}]},
+  set_vs_oesd: {boards:[['Ts','9h','3d'],['Jd','8c','4s'],['Qh','Ts','5d'],['9s','8d','2c'],['Kh','Jd','6s'],['Td','9c','3h'],['Js','Th','4d'],['Qd','9s','5c'],['Kd','Tc','2h'],['8h','7d','3s']],
+    players:[{mode:'category',category:'top_set'},{mode:'category',category:'oesd'}]},
+  set_vs_combo: {boards:[['Jh','8h','4d'],['Ts','7s','3d'],['Qd','9d','5h'],['Th','9h','4d'],['Td','8d','3s'],['Qs','9s','4h'],['Tc','8c','5d'],['9d','7d','3s'],['9s','7s','3d'],['Qh','Th','3s']],
+    players:[{mode:'category',category:'top_set'},{mode:'category',category:'combo_draw'}]},
+  set_vs_wrap13: {boards:[['Ts','9h','4d'],['Jd','Tc','3s'],['Qh','9d','5c'],['9s','8h','2d'],['Kd','Jh','6c'],['Td','9s','3h'],['Js','8d','4c'],['Qc','Th','5s'],['Jh','9c','3d'],['8d','7h','3c']],
+    players:[{mode:'category',category:'top_set'},{mode:'category',category:'wrap_13'}]},
+  set_vs_flush: {boards:[['Qs','8s','3s'],['Jh','7h','2h'],['Kd','9d','4d'],['Tc','6c','3c'],['Ad','8d','5d'],['Ks','Ts','4s'],['Qh','6h','2h'],['Jd','5d','3d'],['Ac','9c','7c'],['9s','7s','2s']],
+    players:[{mode:'category',category:'top_set'},{mode:'category',category:'made_flush'}]},
+  trips_vs_fh: {boards:[['Ks','Kh','5d'],['Qs','Qh','7d'],['Js','Jh','3c'],['Ts','Th','4d'],['9d','9c','6s'],['As','Ah','8c'],['8h','8d','2s'],['7s','7c','4h'],['Kd','Kc','9s'],['Jd','Jc','5h']],
+    players:[{mode:'category',category:'trips'},{mode:'category',category:'full_house'}]},
+  trips_vs_trips: {boards:[['Qs','Qh','7d'],['Ks','Kd','4c'],['Js','Jh','3d'],['Ts','Td','6h'],['9h','9c','5s'],['As','Ad','8c'],['8s','8h','2d'],['7d','7c','4s'],['Kh','Kc','9d'],['Jd','Jc','5s']],
+    players:[{mode:'category',category:'trips'},{mode:'category',category:'trips'}]},
+  overpair_vs_nfd: {boards:[['Ts','9s','3d'],['Jh','8h','4c'],['Qd','7d','2s'],['Ks','6s','3h'],['9h','5h','2d'],['Td','8d','3c'],['Js','7s','4d'],['Qh','6h','2c'],['Kd','9d','5s'],['Tc','8c','3s']],
+    players:[{mode:'category',category:'overpair'},{mode:'category',category:'nut_flush_draw'}]},
+  nfd_vs_oesd: {boards:[['Jh','Th','5d'],['Qs','Js','4c'],['Kd','Td','3h'],['Ts','9s','2d'],['Jd','9d','4h'],['Qh','Th','6c'],['Ks','Js','3d'],['Td','8d','5s'],['Jc','Tc','2h'],['Qs','9s','4d']],
+    players:[{mode:'category',category:'nut_flush_draw'},{mode:'category',category:'oesd'}]},
+  straight_vs_flush: {boards:[['9s','8s','7s'],['Th','9h','8h'],['Jd','Td','9d'],['8c','7c','6c'],['Qs','Js','Ts'],['9h','8h','7h'],['Td','9d','8d'],['Jc','Tc','9c'],['8s','7s','6s'],['Qd','Jd','Td']],
+    players:[{mode:'category',category:'made_straight'},{mode:'category',category:'made_flush'}]},
+  set_vs_wrap9: {boards:[['2d','5c','9h'],['2h','6c','9d'],['2c','6d','Th'],['2h','Td','As'],['3d','6c','Th'],['3d','7s','Tc'],['3h','7d','Js'],['3c','Ts','Ad'],['4h','7d','Jc'],['4s','8h','Jd']],
+    players:[{mode:'category',category:'top_set'},{mode:'category',category:'wrap_9'}]},
+  set_vs_wrap16: {boards:[['4c','5d','Th'],['3c','6d','9h'],['6c','8d','Qh'],['2c','5d','7h'],['3c','Td','Jh'],['4c','6d','9h'],['6c','9d','Jh'],['3c','8d','9h'],['5c','7d','Th'],['2c','Jd','Qh']],
+    players:[{mode:'category',category:'top_set'},{mode:'category',category:'wrap_16'}]},
+  set_vs_wrap17: {boards:[['7c','8d','Ah'],['4c','6d','Th'],['5c','7d','Th'],['6c','7d','Kh'],['6c','Td','Qh'],['7c','9d','Kh'],['8c','9d','Kh'],['4c','5d','Th'],['4c','6d','9h'],['2c','6d','7h']],
+    players:[{mode:'category',category:'top_set'},{mode:'category',category:'wrap_17'}]},
+  set_vs_wrap20: {boards:[['2c','5d','8h'],['6c','9d','Qh'],['7c','9d','Kh'],['3c','9d','Th'],['4c','6d','Th'],['5c','6d','Th'],['3h','7c','8d'],['5c','7d','Ah'],['6c','7d','Ah'],['4c','5d','Kh']],
+    players:[{mode:'category',category:'top_set'},{mode:'category',category:'wrap_20'}]},
+};
+
+let eqCurrentPreset = null;
+
+function eqLoadPreset(name) {
+  const preset = EQ_PRESETS[name];
+  if (!preset) return;
+  eqCurrentPreset = name;
+  const b = preset.boards[Math.floor(Math.random() * preset.boards.length)];
+  const street = b.length >= 4 ? 'turn' : 'flop';
+  eqStreet = street;
+  document.getElementById('eqStreetFlop').classList.toggle('active', street === 'flop');
+  document.getElementById('eqStreetTurn').classList.toggle('active', street === 'turn');
+  eqBoard = [b[0], b[1], b[2], b[3] || null];
+  eqPlayers = preset.players.map(p => ({...p, hand: [null,null,null,null,null], locks: [null,null,null,null,null], blockers: 0}));
+  eqOnBoardChange();
+}
+
+function eqNewBoard() {
+  // Pick a new random board, keep same player config
+  if (eqCurrentPreset && EQ_PRESETS[eqCurrentPreset]) {
+    const preset = EQ_PRESETS[eqCurrentPreset];
+    const b = preset.boards[Math.floor(Math.random() * preset.boards.length)];
+    const street = b.length >= 4 ? 'turn' : 'flop';
+    eqStreet = street;
+    document.getElementById('eqStreetFlop').classList.toggle('active', street === 'flop');
+    document.getElementById('eqStreetTurn').classList.toggle('active', street === 'turn');
+    eqBoard = [b[0], b[1], b[2], b[3] || null];
+  } else {
+    const presets = eqStreet === 'turn' ? EQ_TURN_PRESETS : EQ_BOARD_PRESETS;
+    let texture = 'rainbow';
+    for (const [k, boards] of Object.entries(presets)) {
+      if (boards.some(b => b[0] === eqBoard[0] && b[1] === eqBoard[1] && b[2] === eqBoard[2])) {
+        texture = k;
+        break;
+      }
+    }
+    const options = presets[texture] || presets.rainbow;
+    const b = options[Math.floor(Math.random() * options.length)];
+    eqBoard = [b[0], b[1], b[2], b[3] || null];
+  }
+  eqPlayers.forEach(p => {
+    p.hand = [null,null,null,null,null];
+    p.locks = [null,null,null,null,null];
+  });
+  eqOnBoardChange();
+}
+
+// Wrapper functions that show spinner on the clicked button during loading
+async function eqWithSpinner(btn, fn) {
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.innerHTML = label + '<span class="eq-spinner"></span>';
+  try { await fn(); }
+  finally { btn.disabled = false; btn.textContent = label; }
+}
+
+function eqNewHands() {
+  const btn = document.getElementById('eqRerollBtn');
+  eqWithSpinner(btn, () => eqCalculate());
+}
+
+function eqNewBoardClick() {
+  const btn = document.getElementById('eqNewBoardBtn');
+  eqWithSpinner(btn, async () => { eqNewBoard(); await eqCalculate(); });
+}
+
+// Init equity tab
+eqRenderPresets();
+eqRenderBoard();
+eqRenderPlayers();
+
+// ===== THEME TOGGLE =====
+function toggleTheme() {
+  var current = document.documentElement.getAttribute('data-theme') || 'dark';
+  var next = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('pn-theme', next);
+  // Re-render chart with new theme colors
+  if (_statsData && _statsData.winnings) renderWinningsChart(_statsData.winnings);
 }
 
 // ===== INIT =====

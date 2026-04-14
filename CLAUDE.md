@@ -168,17 +168,75 @@ entry,at,order
 - Cloudflare blocks Python urllib — server falls back to `requests` library if `curl` not available
 - Socket.IO needs session cookies from game page before connecting
 
+## Equity Explorer
+
+### Overview
+Interactive PLO5 equity tool. Users pick a board, assign hand categories to 2+ players (e.g., "Top Set vs 13-out Wrap"), and compute equity via Monte Carlo. Supports single deals and bulk (Multiple Trials) mode with SSE streaming.
+
+### `equity_categories.py`
+Generates representative 5-card PLO5 hands matching named categories on a given board.
+
+**Categories** (defined in `CATEGORIES` dict):
+- **Made hands**: top_set, middle_set, bottom_set, trips, overpair, two_pair_top, full_house, made_flush, made_straight
+- **Draws**: nut_flush_draw, flush_draw, gutshot (4 outs), oesd (8 outs), wrap_9, wrap_13, wrap_16, wrap_17, wrap_20, combo_draw
+
+**Wrap system** — wraps use exact canonical outs (not ranges):
+- `_wrap_target_ranks(board_ranks, target_outs)` computes structural H/B patterns for each wrap type
+- 3-seed wraps (9, 13, 17 outs): 5-rank window, 2B+3H
+- 4-seed wraps (16, 20 outs): 6-7 rank window, 2-3B+4H
+- 9-out uses BHHHB pattern with 3rd board card distance check (>= 4 ranks from all seeds)
+- Post-filter removes targets where any 2-card seed combo + board forms a made straight
+- `_gen_wrap()` uses targeted seeds weighted 10x + general consecutive-rank fallback seeds
+- `_count_straight_outs()` counts individual CARDS not ranks (holding duplicate seed rank reduces available suits)
+
+**Blocker system**:
+- Flush draw blockers: extra cards of the flush suit
+- Set blockers: 3rd card of set rank + other board rank cards
+- Wrap blockers: extra cards of seed ranks (pairs). N blockers = N paired seed ranks in the hand
+- Max blockers: 2 for 3-seed wraps, 1 for 4-seed wraps (constrained by 5-card hand size)
+- `_blocker_cards_for_category()` merges seed ranks from ALL target patterns into the pool
+- Server limits actual locked ranks to seed_count (3 or 4) per trial to avoid exceeding hand size
+
+**Key functions**:
+- `list_valid_categories(board)` — returns which categories are possible, with fixed cards, blocker pools, max_blockers
+- `generate_hands(board, category, count, dead, locked, outs_adjust)` — main API
+- `_validate_hand_for_category(hand, board, category, outs_adjust)` — validates a hand against category rules
+
+**Known limitation**: `_wrap_target_ranks` can produce false-positive targets on boards where the structural pattern exists but actual outs differ (e.g., K-9-2 for 13-out: structural target [T,J,Q] exists but actual outs are only 9 due to wide gap between rank 2 and 9).
+
+### `POST /api/equity/explore`
+- **Single mode**: generates 1 matchup, returns hands + equity
+- **Bulk mode** (`mode: 'bulk'`): streams results via SSE, generates `samples` matchups
+  - Pre-validates categories with `list_valid_categories` before generation (fast-fail)
+  - Random board mode: tries up to 200 boards per trial, validates all categories are possible
+  - Scaled timeout: `max(30, samples * 2)` seconds
+  - Wrap blocker locking: picks one coherent seed subset (3 or 4 ranks), pairs N of them
+  - SSE progress events every 10 samples
+
+### Preset Boards
+Defined in `index.html` as `EQUITY_PRESETS`. Each preset has 10 empirically validated boards that support the target category. Boards were verified to produce exact canonical outs.
+
+## Testing
+
+### `test_stats_engine.py` (131 tests)
+Covers: derive_positions, compute_all_stats (VPIP, PFR, 3-bet, 4-bet, fold-to-3bet, fold-to-4bet, c-bet, steal, WTSD, donk bet, AF, bomb pot stats), compute_winnings, _compute_deltas, equity calculator, all-in EV, side pots.
+
+### `test_equity_categories.py` (136 tests)
+Covers: _wrap_target_ranks (all wrap types, distance checks, post-filter), _count_straight_outs, _gen_wrap (exact outs), _validate_hand_for_category, list_valid_categories, _blocker_cards_for_category, generate_hands (locked cards, outs_adjust), preset board validation (all 50 boards), made-hand generators, server blocker logic simulation, broad coverage across 8 diverse boards.
+
 ## File Structure
 ```
-index.html          — Frontend (single HTML file with embedded CSS/JS)
-server.py           — HTTP server + API endpoints + Socket.IO + PokerNow proxy
-stats_engine.py     — All statistics computation + EV analysis + equity calculator
-csv_parser.py       — CSV and JSON log parser
-requirements.txt    — Python dependencies
-.python-version     — Pins Python 3.11 for Render
+index.html                  — Frontend (single HTML file with embedded CSS/JS)
+server.py                   — HTTP server + API endpoints + Socket.IO + PokerNow proxy
+stats_engine.py             — All statistics computation + EV analysis + equity calculator
+equity_categories.py        — PLO5 hand category engine (wraps, sets, draws, blockers)
+csv_parser.py               — CSV and JSON log parser
+test_stats_engine.py        — Unit tests for stats engine (131 tests)
+test_equity_categories.py   — Unit tests for equity categories (136 tests)
+requirements.txt            — Python dependencies
+.python-version             — Pins Python 3.11 for Render
 ```
 
 ## Contributors
 - Evan Cantwell (Belugaluga2) — original implementation
-- Riley Bonner — additional statistics
-- tatty2004 — stats engine, csv parser, EV analysis
+- Riley Bonner (tatty2004) — additional statistics, equity explorer, stats engine, csv parser, EV analysis

@@ -1512,6 +1512,37 @@ def _equity_eval7(player_hands, board, dead, trials, is_omaha, missing, n_player
                 for w in winners:
                     ties[w] += 1
 
+    elif is_omaha and missing <= 2:
+        # Omaha exact enumeration (flop: C(39,2)=741, turn: 38 runouts)
+        hole_pairs = [list(itertools.combinations(h, 2)) for h in e7_hands]
+        board_triple_idx = list(itertools.combinations(range(5), 3))
+        buf = [None] * 5
+
+        for draw in itertools.combinations(deck, missing):
+            fb = e7_board + list(draw)
+            b3s = [tuple(fb[i] for i in idx) for idx in board_triple_idx]
+
+            scores = []
+            for pairs in hole_pairs:
+                best = 0
+                for h2 in pairs:
+                    buf[0] = h2[0]; buf[1] = h2[1]
+                    for b3 in b3s:
+                        buf[2] = b3[0]; buf[3] = b3[1]; buf[4] = b3[2]
+                        s = eval7.evaluate(buf)
+                        if s > best:
+                            best = s
+                scores.append(best)
+
+            best_score = max(scores)
+            winners = [i for i in range(n_players) if scores[i] == best_score]
+            total += 1
+            if len(winners) == 1:
+                wins[winners[0]] += 1
+            else:
+                for w in winners:
+                    ties[w] += 1
+
     elif is_omaha:
         # Omaha MC with pre-computed combos and reusable eval buffer
         hole_pairs = [list(itertools.combinations(h, 2)) for h in e7_hands]
@@ -1569,6 +1600,39 @@ def _equity_eval7(player_hands, board, dead, trials, is_omaha, missing, n_player
             'ties': ties[i],
         })
     return {'equities': results, 'trials': total}
+
+
+def compute_river_outs(player_hands, board, dead=None):
+    """For a 4-card board (turn), determine which river card wins for which player.
+
+    Returns list of {'card': str, 'winner': int (player index) or -1 for chop}.
+    """
+    if dead is None:
+        dead = []
+    if len(board) != 4:
+        return []
+
+    n_players = len(player_hands)
+    n_hole = max(len(h) for h in player_hands)
+    is_omaha = n_hole >= 4
+
+    used = set()
+    for h in player_hands:
+        used.update(h)
+    used.update(board)
+    used.update(dead)
+
+    remaining = [r + s for r in RANKS for s in SUITS if (r + s) not in used]
+    results = []
+
+    for card_str in remaining:
+        fb = board + [card_str]
+        scores = [_evaluate_hand_for_board(h, fb, is_omaha) for h in player_hands]
+        best = max(scores)
+        winners = [i for i in range(n_players) if scores[i] == best]
+        results.append({'card': card_str, 'winner': winners[0] if len(winners) == 1 else -1})
+
+    return results
 
 
 def _equity_fallback(player_hands, board, dead, trials, is_omaha, missing, n_players):

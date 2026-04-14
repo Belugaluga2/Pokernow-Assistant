@@ -10,6 +10,7 @@ Then open http://localhost:8000
 
 import http.server
 import json
+import random
 import re
 import shutil
 import subprocess
@@ -24,8 +25,9 @@ import os
 from csv_parser import parse_hand_data
 from stats_engine import (
     compute_all_stats, compute_winnings, compute_allin_ev,
-    compute_equity, compute_hand_history, compute_biggest_pots, has_eval7,
+    compute_equity, compute_river_outs, compute_hand_history, compute_biggest_pots, has_eval7,
 )
+from equity_categories import list_valid_categories, generate_hands
 
 PORT = int(os.environ.get('PORT', 8000))
 CURL = shutil.which('curl') or shutil.which('curl.exe') or 'curl'
@@ -526,6 +528,287 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             except Exception as e:
                 print(f'  ERROR equity: {e}')
                 self._json_response(400, {'error': str(e)})
+            return
+
+        # POST /api/equity/categories — list valid categories for a board
+        if self.path == '/api/equity/categories':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = json.loads(self.rfile.read(length).decode('utf-8'))
+                board = body.get('board', [])
+                if len(board) < 3:
+                    self._json_response(400, {'error': 'Need at least 3 board cards'})
+                    return
+                cats = list_valid_categories(board)
+                self._json_response(200, {'categories': cats})
+            except Exception as e:
+                print(f'  ERROR equity/categories: {e}')
+                self._json_response(400, {'error': str(e)})
+            return
+
+        # POST /api/equity/explore — category-based equity exploration
+        if self.path == '/api/equity/explore':
+            mode = 'single'
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                body = json.loads(self.rfile.read(length).decode('utf-8'))
+                board = body.get('board', [])
+                players = body.get('players', [])
+                mode = body.get('mode', 'single')  # 'single' or 'bulk'
+
+                lock_board = body.get('lock_board', True)
+
+                if len(board) < 3:
+                    self._json_response(400, {'error': 'Need at least 3 board cards'})
+                    return
+                if len(players) < 2:
+                    self._json_response(400, {'error': 'Need at least 2 players'})
+                    return
+
+                if mode == 'bulk':
+                    samples = min(body.get('samples', 500), 5000)
+                else:
+                    samples = 1
+
+                # Use SSE streaming for bulk mode
+                if mode == 'bulk':
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'text/event-stream')
+                    self.send_header('Cache-Control', 'no-cache')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.end_headers()
+
+                # Fast-fail: check all categories are valid for this board before attempting generation
+                if lock_board:
+                    valid_cats = {c['name'] for c in list_valid_categories(board) if c.get('possible', True)}
+                    for p in players:
+                        cat = p.get('category')
+                        if cat and cat not in valid_cats:
+                            err = f"Category '{cat}' is not possible on this board"
+                            if mode == 'bulk':
+                                try:
+                                    self.wfile.write(f'data: {json.dumps({"error": err})}\n\n'.encode())
+                                    self.wfile.flush()
+                                except (BrokenPipeError, ConnectionResetError):
+                                    pass
+                            else:
+                                self._json_response(400, {'error': err})
+                            return
+
+                all_matchups = []
+                all_cards = [r + s for r in '23456789TJQKA' for s in 'shdc']
+                board_size = len(board)
+                si = 0
+                failures = 0
+                max_failures = max(samples, 50)  # give up after this many extra failures
+                import time as _srv_time
+                loop_deadline = _srv_time.time() + max(30, samples * 2)  # ~2s per trial budget
+                # Pre-collect which categories need board validation
+                needed_cats = [p['category'] for p in players if 'category' in p]
+                while len(all_matchups) < samples and failures < max_failures and _srv_time.time() < loop_deadline:
+                    # Generate board for this sample
+                    if lock_board:
+                        sample_board = board
+                    else:
+                        # Random board of same size, avoiding player cards and locks
+                        player_dead = set()
+                        for p in players:
+                            if 'hand' in p:
+                                player_dead.update(p['hand'])
+                            for c in p.get('locked', []):
+                                if c:
+                                    player_dead.add(c)
+                        avail = [c for c in all_cards if c not in player_dead]
+                        # Keep generating random boards until one supports all categories
+                        board_ok = False
+                        for _bt in range(200):
+                            sample_board = random.sample(avail, board_size)
+                            if needed_cats:
+                                valid_cats = {c['name'] for c in list_valid_categories(sample_board) if c.get('possible', True)}
+                                if all(cat in valid_cats for cat in needed_cats):
+                                    board_ok = True
+                                    break
+                            else:
+                                board_ok = True
+                                break
+                        if not board_ok:
+                            failures += 1
+                            continue
+
+                    matchup_hands = []
+                    dead = list(sample_board)
+                    valid = True
+                    for p in players:
+                        if 'hand' in p:
+                            matchup_hands.append(p['hand'])
+                            dead.extend(p['hand'])
+                        elif 'category' in p:
+                            locked = [c for c in p.get('locked', []) if c]
+                            if len(locked) == 5:
+                                # Fully locked — use as-is if no collisions
+                                if any(c in dead for c in locked):
+                                    valid = False
+                                    break
+                                matchup_hands.append(locked)
+                                dead.extend(locked)
+                            else:
+                                # Randomly pick blocker cards for this trial
+                                blocker_pool = p.get('blocker_pool', [])
+                                blocker_count = p.get('blockers', 0)
+                                extra_locked = []
+                                avoid = []
+                                outs_adj = 0
+                                if blocker_pool:
+                                    is_flush_draw = p['category'] in ('nut_flush_draw', 'flush_draw', 'combo_draw')
+                                    is_wrap = p['category'] in ('gutshot', 'oesd', 'wrap_9', 'wrap_13', 'wrap_16', 'wrap_17', 'wrap_20')
+                                    is_structured_wrap = p['category'] in ('wrap_9', 'wrap_13', 'wrap_16', 'wrap_17', 'wrap_20')
+                                    available = [c for c in blocker_pool if c not in dead and c not in locked]
+                                    if is_structured_wrap and blocker_count > 0:
+                                        # Lock entire seed structure with N paired ranks.
+                                        # Group available cards by rank
+                                        by_rank = {}
+                                        for c in available:
+                                            by_rank.setdefault(c[0], []).append(c)
+                                        seed_ranks = list(by_rank.keys())
+                                        random.shuffle(seed_ranks)
+                                        # Limit to correct seed count for the wrap type.
+                                        # Blocker pool may merge ranks from multiple target
+                                        # patterns; locking all of them exceeds 5-card hand size.
+                                        seed_count = 3 if p['category'] in ('wrap_9', 'wrap_13', 'wrap_17') else 4
+                                        seed_ranks = seed_ranks[:seed_count]
+                                        # Pick N ranks to pair (need 2+ cards available)
+                                        pair_ranks = [r for r in seed_ranks if len(by_rank[r]) >= 2][:blocker_count]
+                                        extra_locked = []
+                                        for r in seed_ranks:
+                                            cards = by_rank[r]
+                                            random.shuffle(cards)
+                                            if r in pair_ranks:
+                                                extra_locked.extend(cards[:2])  # pair
+                                            else:
+                                                extra_locked.append(cards[0])  # single
+                                        outs_adj = blocker_count
+                                    else:
+                                        to_pick = blocker_count + (1 if is_flush_draw else 0)
+                                        random.shuffle(available)
+                                        extra_locked = available[:to_pick]
+                                        if is_wrap:
+                                            outs_adj = blocker_count
+                                    # For flush draws, avoid remaining suited cards to prevent extra flush suit in hand.
+                                    # For wraps, do NOT avoid — wraps need out-rank cards as core hand ranks.
+                                    if not is_wrap:
+                                        avoid = [c for c in available if c not in extra_locked]
+                                gen = generate_hands(sample_board, p['category'], count=1, dead=dead + avoid, locked=locked + extra_locked, outs_adjust=outs_adj)
+                                if not gen:
+                                    valid = False
+                                    break
+                                matchup_hands.append(gen[0])
+                                dead.extend(gen[0])
+                        else:
+                            valid = False
+                            break
+                    if not valid:
+                        failures += 1
+                        continue
+
+                    eq = compute_equity(matchup_hands, sample_board, [])
+                    all_matchups.append({
+                        'hands': matchup_hands,
+                        'board': sample_board,
+                        'equity': [e['equity'] for e in eq['equities']],
+                    })
+                    si += 1
+
+                    # Stream progress for bulk mode every 10 samples
+                    if mode == 'bulk' and si % 10 == 0:
+                        try:
+                            msg = json.dumps({'progress': si, 'total': samples})
+                            self.wfile.write(f'data: {msg}\n\n'.encode())
+                            self.wfile.flush()
+                        except (BrokenPipeError, ConnectionResetError):
+                            return
+
+                if not all_matchups:
+                    if mode == 'bulk':
+                        try:
+                            msg = json.dumps({'error': 'Could not generate valid hands for these categories on this board'})
+                            self.wfile.write(f'data: {msg}\n\n'.encode())
+                            self.wfile.flush()
+                        except (BrokenPipeError, ConnectionResetError):
+                            pass
+                    else:
+                        self._json_response(400, {'error': 'Could not generate valid hands for these categories on this board'})
+                    return
+
+                # Aggregate results
+                n_players = len(players)
+                avg_eq = [0.0] * n_players
+                for m in all_matchups:
+                    for i, e in enumerate(m['equity']):
+                        avg_eq[i] += e
+                for i in range(n_players):
+                    avg_eq[i] /= len(all_matchups)
+
+                n_matchups = len(all_matchups)
+                std_errs = [0.0] * n_players
+                if mode == 'bulk' and n_matchups > 1:
+                    import math
+                    for i in range(n_players):
+                        vals = [m['equity'][i] for m in all_matchups]
+                        mean = avg_eq[i]
+                        std_dev = (sum((v - mean) ** 2 for v in vals) / len(vals)) ** 0.5
+                        std_errs[i] = round(1.96 * std_dev / math.sqrt(n_matchups), 1)  # 95% confidence interval
+
+                player_results = []
+                for i, p in enumerate(players):
+                    label = p.get('label', p.get('category', f'Player {i+1}'))
+                    entry = {'label': label, 'equity': round(avg_eq[i], 1)}
+                    if mode == 'bulk':
+                        entry['std_dev'] = std_errs[i]
+                    player_results.append(entry)
+
+                response = {
+                    'players': player_results,
+                    'samples_run': len(all_matchups),
+                    'mode': mode,
+                    'exact': True,
+                    'done': True,
+                }
+                if mode == 'single' and all_matchups:
+                    response['hands'] = all_matchups[0]['hands']
+                    response['board'] = all_matchups[0].get('board', board)
+                    # Compute river outs for turn boards (4 cards, 1 to come)
+                    resp_board = response['board']
+                    if len(resp_board) == 4:
+                        outs = compute_river_outs(all_matchups[0]['hands'], resp_board)
+                        if outs:
+                            response['river_outs'] = outs
+                            # Override equity from outs so numbers match exactly
+                            total = len(outs)
+                            n_p = len(players)
+                            for i in range(n_p):
+                                w = sum(1 for o in outs if o['winner'] == i)
+                                t = sum(1 for o in outs if o['winner'] == -1)
+                                player_results[i]['equity'] = round((w + t / n_p) / total * 100, 1)
+
+                if mode == 'bulk':
+                    try:
+                        self.wfile.write(f'data: {json.dumps(response)}\n\n'.encode())
+                        self.wfile.flush()
+                    except (BrokenPipeError, ConnectionResetError):
+                        pass
+                else:
+                    self._json_response(200, response)
+            except Exception as e:
+                print(f'  ERROR equity/explore: {e}')
+                import traceback; traceback.print_exc()
+                if mode == 'bulk':
+                    try:
+                        self.wfile.write(f'data: {json.dumps({"error": str(e)})}\n\n'.encode())
+                        self.wfile.flush()
+                    except (BrokenPipeError, ConnectionResetError):
+                        pass
+                else:
+                    self._json_response(400, {'error': str(e)})
             return
 
         self.send_response(404)
