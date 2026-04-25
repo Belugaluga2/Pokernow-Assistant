@@ -495,8 +495,6 @@
   .hh-row { display: flex; align-items: center; gap: 0.6rem; }
   .hh-num { color: var(--text-muted); font-size: 0.75rem; font-weight: 600; min-width: 42px; font-family: 'JetBrains Mono', monospace; }
   .hh-type { color: var(--text-muted); font-size: 0.7rem; }
-  .hh-allin { }
-  .hh-allin-badge { font-size: 0.6rem; font-weight: 700; color: var(--yellow); background: var(--yellow-dim); padding: 2px 7px; border-radius: 4px; letter-spacing: 0.04em; text-transform: uppercase; }
   .hh-db-badge { font-size: 0.6rem; font-weight: 700; padding: 2px 7px; border-radius: 4px; letter-spacing: 0.04em; text-transform: uppercase; }
   .hh-db-scoop { color: var(--accent); background: var(--accent-glow); }
   .hh-db-threequarter { color: var(--purple); background: var(--purple-dim); }
@@ -509,13 +507,6 @@
   }
   .hh-filter-btn:hover { border-color: var(--purple); color: var(--text-primary); }
   .hh-filter-btn.active { border-color: var(--purple); color: var(--purple); background: var(--purple-dim); }
-  .hh-ev-line {
-    margin-top: 5px; padding: 5px 10px; background: var(--blue-dim); border-radius: 5px;
-    font-size: 0.82rem; display: flex; gap: 12px; align-items: center;
-  }
-  .hh-ev-eq { color: var(--blue); font-weight: 700; font-size: 0.9rem; }
-  .hh-ev-val { color: var(--text-secondary); }
-  .hh-ev-diff { font-weight: 600; font-size: 0.85rem; }
   .hh-sort-bar {
     display: flex; align-items: center; gap: 6px; padding: 8px 18px;
     border-bottom: 1px solid var(--border-subtle); background: rgba(255, 255, 255, 0.01);
@@ -1016,12 +1007,6 @@
           </div>
         </div>
 
-        <!-- EV analysis -->
-        <div class="card" id="evCard" style="display:none">
-          <h2>All-in EV Analysis</h2>
-          <div id="evContent"></div>
-        </div>
-
         <!-- Biggest Pots -->
         <div class="card" id="bigPotsCard" style="display:none">
           <h2>Biggest Pots</h2>
@@ -1260,7 +1245,6 @@ async function processFile(file) {
 
   try {
     const text = await file.text();
-    _lastUploadedFile = text;  // store for on-demand EV
     const res = await fetch('/api/stats/upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/octet-stream' },
@@ -1356,18 +1340,9 @@ function renderFullStats(data) {
   // Winnings chart
   renderWinningsChart(data.winnings);
 
-  // EV analysis — show button instead of auto-computing
-  renderEV(data.ev);
-
   // Biggest pots
   renderBiggestPots(data.biggestPots);
 }
-
-let _lastUploadedFile = null;  // store file text for on-demand EV
-let _lastEvTrials = 100000;
-let _evData = null;
-let _evSortCol = 'diff';
-let _evSortDir = 'desc';
 
 function switchStatTab(name, btn) {
   _currentStatTab = name;
@@ -1524,188 +1499,6 @@ function renderWinningsChart(winnings) {
   });
 }
 
-// ===== EV ANALYSIS =====
-function renderEV(ev) {
-  const card = document.getElementById('evCard');
-  if (!ev || !ev.available) {
-    card.style.display = 'none';
-    return;
-  }
-
-  card.style.display = 'block';
-
-  // Not yet computed — show button with trials input
-  if (!ev.computed && !ev.perPlayer) {
-    document.getElementById('evContent').innerHTML = `
-      <p style="color:#94a3b8; margin-bottom:1rem;">Monte Carlo equity simulation for all-in hands.</p>
-      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
-        <label style="color:#64748b;font-size:0.85rem;">Trials: <input type="number" id="evTrials" value="100000" min="500" max="500000" step="1000" style="width:80px;padding:0.3rem;background:var(--bg-input);border:1px solid var(--border-strong);border-radius:4px;color:var(--text-primary);font-size:0.85rem;"></label>
-        <button class="btn btn-sm" onclick="computeEV()">Compute All-in EV</button>
-        <span style="color:#475569;font-size:0.75rem;">Lower = faster, higher = more accurate</span>
-      </div>
-    `;
-    return;
-  }
-
-  const pp = ev.perPlayer || {};
-  const rows = ev.evRows || [];
-  _evData = ev;
-  if (typeof hpRefresh === 'function') hpRefresh();
-
-  // Get winnings data for net totals
-  const wp = (_statsData && _statsData.winnings && _statsData.winnings.players) || {};
-
-  // Build sortable rows
-  const evIcon = k => _evSortCol !== k ? '' : _evSortDir === 'asc' ? ' \u25B2' : ' \u25BC';
-  const evEntries = Object.entries(pp).map(([name, agg]) => {
-    const wArr = wp[name];
-    const netWon = wArr ? wArr[wArr.length - 1] : null;
-    const evAdj = netWon != null ? netWon - agg.diff : null;
-    return { name, count: agg.count, netWon, avgEq: agg.avgEquity, winPct: agg.winPct, allinWon: agg.actual, allinEv: agg.ev, evAdj, diff: agg.diff };
-  });
-  evEntries.sort((a, b) => {
-    const va = a[_evSortCol] ?? -Infinity;
-    const vb = b[_evSortCol] ?? -Infinity;
-    return _evSortDir === 'asc' ? va - vb : vb - va;
-  });
-
-  let html = '<h3 style="font-size:0.95rem;color:#cbd5e1;margin-bottom:0.75rem;">Per-Player All-in Summary</h3>';
-  html += `<table class="ev-table"><thead><tr>
-    <th>Player</th>
-    <th class="num sortable" onclick="evSort('count')"># All-ins${evIcon('count')}</th>
-    <th class="num sortable" onclick="evSort('avgEq')">Avg Equity${evIcon('avgEq')}</th>
-    <th class="num sortable" onclick="evSort('winPct')">Win %${evIcon('winPct')}</th>
-    <th class="num sortable" onclick="evSort('allinWon')">All-in Won${evIcon('allinWon')}</th>
-    <th class="num sortable" onclick="evSort('allinEv')">All-in EV${evIcon('allinEv')}</th>
-    <th class="num sortable" onclick="evSort('diff')">All-in Diff${evIcon('diff')}</th>
-    <th class="num sortable" onclick="evSort('netWon')">Net Won${evIcon('netWon')}</th>
-    <th class="num sortable" onclick="evSort('evAdj')">Expected Winnings${evIcon('evAdj')}</th>
-  </tr></thead><tbody>`;
-
-  for (const r of evEntries) {
-    const cls = v => v > 0.005 ? 'positive' : v < -0.005 ? 'negative' : 'neutral';
-    const fmt = v => (v > 0 ? '+' : '') + '$' + v.toFixed(2);
-    const netClass = r.netWon != null ? cls(r.netWon) : '';
-    const eqClass = r.avgEq >= 50 ? 'positive' : 'negative';
-    const diffClass = cls(r.diff);
-    const evAdjClass = r.evAdj != null ? cls(r.evAdj) : '';
-    const winClass = r.winPct > r.avgEq + 0.5 ? 'positive' : r.winPct < r.avgEq - 0.5 ? 'negative' : 'neutral';
-    html += `<tr><td><a href="#" class="player-link" onclick="showEvChart(this.textContent); return false">${esc(r.name)}</a></td><td class="num">${r.count}</td>`;
-    html += `<td class="num ${eqClass}">${r.avgEq.toFixed(1)}%</td>`;
-    html += `<td class="num ${winClass}">${r.winPct.toFixed(1)}%</td>`;
-    const allinWonClass = cls(r.allinWon);
-    const allinEvClass = cls(r.allinEv);
-    html += `<td class="num ${allinWonClass}">${fmt(r.allinWon)}</td>`;
-    html += `<td class="num ${allinEvClass}">${fmt(r.allinEv)}</td>`;
-    html += `<td class="num ${diffClass}">${fmt(r.diff)}</td>`;
-    html += `<td class="num ${netClass}">${r.netWon != null ? fmt(r.netWon) : '—'}</td>`;
-    html += `<td class="num ${evAdjClass}">${r.evAdj != null ? fmt(r.evAdj) : '—'}</td></tr>`;
-  }
-  html += '</tbody></table>';
-
-  // Summary line with found/analyzed counts and skip reasons
-  const found = ev.totalAllin || rows.length;
-  const analyzed = ev.totalAnalyzed || rows.length;
-  const skipped = found - analyzed;
-  let summary = `${analyzed} all-in hands analyzed`;
-  if (skipped > 0) {
-    const reasons = ev.skipReasons || {};
-    const parts = Object.entries(reasons).map(([r, n]) => `${n} ${r}`);
-    summary += ` (${skipped} skipped — ${parts.join(', ') || 'see details'})`;
-  }
-  html += `<p style="margin-top:1rem;color:#64748b;font-size:0.85rem;">${summary}</p>`;
-
-  // Recompute controls
-  html += `<div style="margin-top:0.75rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
-    <label style="color:#64748b;font-size:0.85rem;">Trials: <input type="number" id="evTrials" value="${_lastEvTrials}" min="500" max="500000" step="1000" style="width:80px;padding:0.3rem;background:var(--bg-input);border:1px solid var(--border-strong);border-radius:4px;color:var(--text-primary);font-size:0.85rem;"></label>
-    <button class="btn btn-sm btn-outline" onclick="computeEV()">Recompute</button>
-  </div>`;
-
-  document.getElementById('evContent').innerHTML = html;
-}
-
-function evSort(col) {
-  if (_evSortCol === col) _evSortDir = _evSortDir === 'asc' ? 'desc' : 'asc';
-  else { _evSortCol = col; _evSortDir = 'desc'; }
-  if (_evData) renderEV(_evData);
-}
-
-async function computeEV() {
-  if (!_lastUploadedFile) {
-    document.getElementById('evContent').innerHTML = '<p class="error">No file data available. Please re-upload your CSV.</p>';
-    return;
-  }
-
-  const trialsInput = document.getElementById('evTrials');
-  const trials = trialsInput ? parseInt(trialsInput.value) || 100000 : 100000;
-  _lastEvTrials = trials;
-
-  document.getElementById('evContent').innerHTML = `
-    <div id="evProgressArea">
-      <div style="margin-bottom:0.75rem">
-        <span id="evProgressText" style="color:#94a3b8;font-size:0.85rem;">Scanning for all-in hands...</span>
-      </div>
-      <div style="width:100%;height:6px;background:var(--bg-input);border-radius:3px;overflow:hidden;">
-        <div id="evProgressBar" style="height:100%;width:0%;background:#22c55e;border-radius:3px;transition:width 0.3s;"></div>
-      </div>
-    </div>`;
-
-  try {
-    const res = await fetch('/api/stats/ev?trials=' + trials, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/octet-stream' },
-      body: _lastUploadedFile,
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `Server returned ${res.status}`);
-    }
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let result = null;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      const parts = buffer.split('\n\n');
-      buffer = parts.pop();
-
-      for (const part of parts) {
-        if (!part.startsWith('data: ')) continue;
-        const data = JSON.parse(part.slice(6));
-
-        if (data.error) {
-          throw new Error(data.error);
-        } else if (data.done) {
-          result = data;
-        } else if (data.progress !== undefined) {
-          const pct = data.total > 0 ? Math.round(data.progress / data.total * 100) : 0;
-          const bar = document.getElementById('evProgressBar');
-          const text = document.getElementById('evProgressText');
-          if (bar) bar.style.width = pct + '%';
-          if (text) text.textContent = data.total === 0
-            ? 'No all-in hands found'
-            : `Computing hand ${data.progress} of ${data.total}...`;
-        }
-      }
-    }
-
-    if (result) {
-      result.computed = true;
-      renderEV(result);
-    } else {
-      throw new Error('No result received from server');
-    }
-  } catch (err) {
-    document.getElementById('evContent').innerHTML = `<p class="error">EV Error: ${esc(err.message)}</p><button class="btn btn-sm btn-outline" style="margin-top:0.5rem" onclick="computeEV()">Retry</button>`;
-  }
-}
-
 // ===== HAND HISTORY MODAL =====
 const _GT_LABELS = {th:"Hold'em",he:"Hold'em",oh:'Omaha',plo:'PLO',plo5:'PLO5'};
 
@@ -1739,31 +1532,12 @@ function showHandHistory(playerName, sortCol, sortDir) {
   const totalClass = total > 0.005 ? 'positive' : total < -0.005 ? 'negative' : 'neutral';
   const totalStr = (total > 0 ? '+' : '') + '$' + total.toFixed(2);
 
-  // Build EV lookup: handNumber → {equity, ev, actual, diff, street} for this player
-  const evLookup = {};
-  if (_evData && _evData.evRows) {
-    for (const row of _evData.evRows) {
-      for (const p of row.players || []) {
-        if (p.name === playerName) {
-          if (!evLookup[row.handNumber]) evLookup[row.handNumber] = { equity: p.equity, ev: p.ev, actual: p.actual, diff: p.diff, street: row.street };
-          else { evLookup[row.handNumber].ev += p.ev; evLookup[row.handNumber].actual += p.actual; evLookup[row.handNumber].diff += p.diff; }
-        }
-      }
-    }
-  }
-
   // Sort hands
   const sorted = [...hands];
   sorted.sort((a, b) => {
     let va, vb;
     if (_hhSortCol === 'hand') { va = Number(a.hand); vb = Number(b.hand); }
-    else if (_hhSortCol === 'delta') { va = a.delta; vb = b.delta; }
-    else if (_hhSortCol === 'diff') {
-      const ea = evLookup[String(a.hand)];
-      const eb = evLookup[String(b.hand)];
-      va = ea ? ea.diff : -Infinity;
-      vb = eb ? eb.diff : -Infinity;
-    }
+    else { va = a.delta; vb = b.delta; }
     return _hhSortDir === 'asc' ? va - vb : vb - va;
   });
 
@@ -1778,14 +1552,11 @@ function showHandHistory(playerName, sortCol, sortDir) {
     const dc = h.delta > 0.005 ? 'positive' : h.delta < -0.005 ? 'negative' : 'neutral';
     const ds = (h.delta > 0 ? '+' : '') + '$' + h.delta.toFixed(2);
     const gt = _GT_LABELS[h.gt] || h.gt || '';
-    const evInfo = evLookup[String(h.hand)];
     const tag = (h.bp ? 'BP ' : '') + gt;
 
-    body += `<div class="hh-entry${evInfo ? ' hh-allin' : ''}"><div class="hh-row">`;
+    body += `<div class="hh-entry"><div class="hh-row">`;
     body += `<span class="hh-num">#${esc(String(h.hand))}</span>`;
     if (tag) body += `<span class="hh-type">${tag}</span>`;
-    const streetLabel = evInfo ? (evInfo.street === 'turn' ? 'TURN' : 'FLOP') : '';
-    if (evInfo) body += `<span class="hh-allin-badge">ALL-IN ${streetLabel}</span>`;
     if (h.dbOutcome) { const dbLabel = h.dbOutcome === 'threequarter' ? '3/4' : h.dbOutcome.toUpperCase(); body += `<span class="hh-db-badge hh-db-${h.dbOutcome}">${dbLabel}</span>`; }
     body += `<span class="hh-delta ${dc}">${ds}</span></div>`;
 
@@ -1800,10 +1571,6 @@ function showHandHistory(playerName, sortCol, sortDir) {
     }
     if (h.board2 && h.board2.length) {
       body += `<div class="hh-cards"><span class="hh-label">Board 2:</span> ${_cards(h.board2)}</div>`;
-    }
-    if (evInfo) {
-      const evDiffClass = evInfo.diff > 0.5 ? 'positive' : evInfo.diff < -0.5 ? 'negative' : 'neutral';
-      body += `<div class="hh-ev-line"><span class="hh-ev-eq">${evInfo.equity.toFixed(1)}%</span> <span class="hh-ev-val">EV ${evInfo.ev > 0 ? '+' : ''}$${evInfo.ev.toFixed(2)}</span> <span class="hh-ev-diff ${evDiffClass}">Diff ${evInfo.diff > 0 ? '+' : ''}$${evInfo.diff.toFixed(2)}</span></div>`;
     }
     body += '</div>';
   }
@@ -1834,7 +1601,6 @@ function showHandHistory(playerName, sortCol, sortDir) {
       <span style="color:#64748b;font-size:0.75rem;">Sort:</span>
       <button class="hh-sort-btn${_hhSortCol === 'hand' ? ' active' : ''}" onclick="hhSort('hand')">Hand #${hhIcon('hand')}</button>
       <button class="hh-sort-btn${_hhSortCol === 'delta' ? ' active' : ''}" onclick="hhSort('delta')">Won/Lost${hhIcon('delta')}</button>
-      <button class="hh-sort-btn${_hhSortCol === 'diff' ? ' active' : ''}" onclick="hhSort('diff')">EV Diff${hhIcon('diff')}</button>
     </div>
     ${filterBar}
     <div class="hh-body">${body}</div>
@@ -1857,123 +1623,6 @@ function hhFilter(key) {
   if (_hhPlayer) showHandHistory(_hhPlayer);
 }
 
-// ===== EV CHART MODAL =====
-function showEvChart(playerName) {
-  if (!_evData || !_statsData || !_statsData.winnings) return;
-  const wp = _statsData.winnings.players || {};
-  const wArr = wp[playerName];
-  if (!wArr) return;
-
-  const handLabels = _statsData.winnings.handLabels || [];
-  const evRows = _evData.evRows || [];
-
-  // Build a map of handNumber → cumulative diff for this player
-  const diffByHand = {};
-  for (const row of evRows) {
-    for (const p of row.players || []) {
-      if (p.name === playerName) {
-        diffByHand[row.handNumber] = (diffByHand[row.handNumber] || 0) + p.diff;
-      }
-    }
-  }
-
-  // Build cumulative actual and EV-adjusted lines
-  // wArr has length handLabels.length + 1 (starts with 0)
-  const actualData = [];
-  const evAdjData = [];
-  let cumDiff = 0;
-
-  for (let i = 0; i < wArr.length; i++) {
-    actualData.push(wArr[i]);
-    if (i > 0) {
-      const hn = handLabels[i - 1];
-      if (diffByHand[hn] !== undefined) cumDiff += diffByHand[hn];
-    }
-    evAdjData.push(Math.round((wArr[i] - cumDiff) * 100) / 100);
-  }
-
-  const xLabels = ['0', ...handLabels];
-
-  const overlay = document.createElement('div');
-  overlay.className = 'hh-overlay';
-  overlay.innerHTML = `<div class="hh-panel" style="max-width:800px;">
-    <div class="hh-header">
-      <div><h2>${esc(playerName)}</h2><div class="hh-sub">Actual vs Expected Winnings Winnings</div></div>
-      <button class="hh-close" onclick="this.closest('.hh-overlay').remove()">&times;</button>
-    </div>
-    <div style="padding:1rem;height:400px;">
-      <canvas id="evChartCanvas"></canvas>
-    </div>
-  </div>`;
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-  document.body.appendChild(overlay);
-
-  const handler = e => { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', handler); } };
-  document.addEventListener('keydown', handler);
-
-  const ctx = document.getElementById('evChartCanvas').getContext('2d');
-  new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: xLabels,
-      datasets: [
-        {
-          label: 'Actual',
-          data: actualData,
-          borderColor: '#22c55e',
-          backgroundColor: 'transparent',
-          borderWidth: 2,
-          pointRadius: 0,
-          tension: 0.1,
-        },
-        {
-          label: 'Expected Winnings',
-          data: evAdjData,
-          borderColor: '#f59e0b',
-          backgroundColor: 'transparent',
-          borderWidth: 2,
-          pointRadius: 0,
-          tension: 0.1,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: {
-          position: 'top',
-          labels: { color: _chartColors().legend, usePointStyle: true, pointStyle: 'line', padding: 12 },
-        },
-        tooltip: {
-          backgroundColor: _chartColors().tooltipBg,
-          borderColor: _chartColors().tooltipBorder,
-          borderWidth: 1,
-          titleColor: _chartColors().tooltipTitle,
-          bodyColor: _chartColors().tooltipBody,
-          callbacks: {
-            label: ctx => `${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)}`,
-          },
-        },
-      },
-      scales: {
-        x: {
-          display: true,
-          title: { display: true, text: 'Hands', color: _chartColors().title },
-          ticks: { color: _chartColors().tick, maxTicksLimit: 10 },
-          grid: { color: _chartColors().grid },
-        },
-        y: {
-          display: true,
-          title: { display: true, text: 'Winnings ($)', color: _chartColors().title },
-          ticks: { color: _chartColors().tick, callback: v => '$' + v },
-          grid: { color: _chartColors().grid },
-        },
-      },
-    },
-  });
-}
 
 // ===== BIGGEST POTS =====
 let _bigPotsData = null;
@@ -3498,15 +3147,6 @@ function hpRender() {
     ? `${ordered.length} hand${ordered.length === 1 ? '' : 's'}${smallLoss.length ? ` (${smallLoss.length} small-loss at bottom)` : ''}`
     : '';
 
-  // Build EV-by-hand map for this player from _evData if available.
-  const evByHand = {};
-  if (typeof _evData !== 'undefined' && _evData && Array.isArray(_evData.evRows)) {
-    for (const row of _evData.evRows) {
-      const pl = (row.players || []).find(pp => pp.name === player);
-      if (pl) evByHand[String(row.handNumber)] = pl;
-    }
-  }
-
   // Reset selection whenever list re-renders.
   _hpSelected = null;
   document.getElementById('eqHpCalcBtn').disabled = true;
@@ -3518,13 +3158,12 @@ function hpRender() {
     return;
   }
 
-  const gridCols = '7rem 4rem 1fr 1fr 5rem 5rem 5rem';
+  const gridCols = '7rem 4rem 1fr 1fr 5rem 5rem';
   const header = `<div style="display:grid;grid-template-columns:${gridCols};gap:0.5rem;padding:0.45rem 0.6rem;border-bottom:1px solid var(--border-default);font-size:0.7rem;color:var(--text-tertiary);letter-spacing:0.06em;font-weight:700;background:rgba(255,255,255,0.02);position:sticky;top:0;">
     <span>EQUITY</span>
     <span>HAND</span><span>HOLE</span><span>BOARD</span>
     <span style="text-align:right;">POT</span>
     <span style="text-align:right;">${esc(player)} NET</span>
-    <span style="text-align:right;">A/I EV</span>
   </div>`;
 
   const rowsHtml = ordered.map(h => {
@@ -3540,13 +3179,6 @@ function hpRender() {
     const pot = (h.potSize != null) ? `$${(+h.potSize).toFixed(2)}` : '—';
     const deltaCol = h.delta > 0 ? '#22c55e' : (h.delta < 0 ? '#ef4444' : 'var(--text-secondary)');
     const deltaStr = `${h.delta >= 0 ? '+' : ''}$${(+h.delta).toFixed(2)}`;
-    const evRow = evByHand[String(h.hand)];
-    let evStr = '<span style="color:var(--text-muted);">—</span>';
-    if (evRow && typeof evRow.ev === 'number') {
-      const sign = evRow.ev >= 0 ? '+' : '';
-      const col = evRow.ev >= 0 ? '#22c55e' : '#ef4444';
-      evStr = `<span style="color:${col};">${sign}$${evRow.ev.toFixed(2)}</span>`;
-    }
     const statusBadge = selectable
       ? `<span style="display:inline-flex;align-items:center;gap:0.25rem;padding:0.15rem 0.5rem;border-radius:10px;background:rgba(34,197,94,0.15);color:#22c55e;font-size:0.65rem;font-weight:700;letter-spacing:0.04em;border:1px solid rgba(34,197,94,0.3);">● ${esc(h.allinSnapshot.street.toUpperCase())}</span>`
       : `<span style="display:inline-flex;align-items:center;gap:0.25rem;padding:0.15rem 0.5rem;border-radius:10px;background:rgba(148,163,184,0.1);color:var(--text-muted);font-size:0.65rem;font-weight:700;letter-spacing:0.04em;border:1px solid var(--border-subtle);">○ N/A</span>`;
@@ -3557,7 +3189,6 @@ function hpRender() {
       <span>${boardHtml}</span>
       <span style="text-align:right;font-family:'JetBrains Mono',monospace;">${pot}</span>
       <span style="text-align:right;font-family:'JetBrains Mono',monospace;color:${deltaCol};">${deltaStr}</span>
-      <span style="text-align:right;font-family:'JetBrains Mono',monospace;">${evStr}</span>
     </div>`;
   }).join('');
 
