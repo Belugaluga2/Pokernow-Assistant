@@ -1447,58 +1447,80 @@ def _suit_char(card):
     return card[1]
 
 
+# Precomputed straight rank-presence masks. A bit set at position r means rank r
+# (2..14) is in the hand. For wheel detection, also set bit 1 when ace is present.
+# Straight ending at top T (5..14) uses 5 consecutive bits ending at T (bits T-4..T).
+_STRAIGHT_MASKS = [(top, 0x1f << (top - 4)) for top in range(14, 4, -1)]
+
+
 @functools.lru_cache(maxsize=None)
 def _eval5_cached(cards_sorted):
     """Evaluate a 5-card hand. Input MUST be a sorted tuple of 5 card strings.
     Returns a comparable tuple (category, tiebreakers). Memoized — same 5 cards
     in any order map to the same cache entry via the sorted-tuple key.
+
+    Uses bitmask + rank-count array; avoids dict/set/sort allocations in the hot path.
     """
-    ranks = sorted((_rank_int(c) for c in cards_sorted), reverse=True)
-    suits = [_suit_char(c) for c in cards_sorted]
+    # Build rank-count array (index 2..14) and rank-presence bitmask in one pass.
+    rank_count = [0] * 15
+    rank_mask = 0
+    suits = []
+    for c in cards_sorted:
+        r = RANKS.index(c[0]) + 2
+        rank_count[r] += 1
+        rank_mask |= 1 << r
+        suits.append(c[1])
 
-    is_flush = len(set(suits)) == 1
+    # Wheel: ace counts as low for A-2-3-4-5. Bit 1 represents the low ace
+    # (rank 2 is at bit 2, so low ace sits one position below).
+    if rank_count[14]:
+        rank_mask |= 2
 
-    # Straight check
-    unique = sorted(set(ranks), reverse=True)
-    is_straight = False
-    top_straight = 0
-    if len(unique) >= 5:
-        for i in range(len(unique) - 4):
-            if unique[i] - unique[i + 4] == 4:
-                is_straight = True
-                top_straight = unique[i]
-                break
-        if not is_straight and {14, 5, 4, 3, 2}.issubset(set(unique)):
-            is_straight = True
-            top_straight = 5
+    is_flush = suits[0] == suits[1] == suits[2] == suits[3] == suits[4]
 
-    freq = {}
-    for r in ranks:
-        freq[r] = freq.get(r, 0) + 1
-    freq_sorted = sorted(freq.items(), key=lambda x: (x[1], x[0]), reverse=True)
+    # Highest straight (loop short-circuits on first match — already top-down).
+    straight_top = 0
+    for top, mask in _STRAIGHT_MASKS:
+        if (rank_mask & mask) == mask:
+            straight_top = top
+            break
 
-    if is_flush and is_straight:
-        return (9, top_straight)
-    if freq_sorted[0][1] == 4:
-        return (8, freq_sorted[0][0], freq_sorted[1][0])
-    if freq_sorted[0][1] == 3 and freq_sorted[1][1] == 2:
-        return (7, freq_sorted[0][0], freq_sorted[1][0])
+    if is_flush and straight_top:
+        return (9, straight_top)
+
+    # Find groups by count: walk ranks high→low, classify into quads/trips/pairs/singles.
+    quads = trips = 0
+    pairs = []
+    singles = []
+    for r in range(14, 1, -1):
+        c = rank_count[r]
+        if c == 4:
+            quads = r
+        elif c == 3:
+            trips = r
+        elif c == 2:
+            pairs.append(r)
+        elif c == 1:
+            singles.append(r)
+
+    if quads:
+        # Find the single non-quads card as kicker.
+        kicker = singles[0] if singles else (pairs[0] if pairs else trips)
+        return (8, quads, kicker)
+    if trips and pairs:
+        return (7, trips, pairs[0])
     if is_flush:
-        return (6,) + tuple(ranks)
-    if is_straight:
-        return (5, top_straight)
-    if freq_sorted[0][1] == 3:
-        kickers = sorted([x[0] for x in freq_sorted[1:]], reverse=True)
-        return (4, freq_sorted[0][0]) + tuple(kickers)
-    if freq_sorted[0][1] == 2 and len(freq_sorted) > 1 and freq_sorted[1][1] == 2:
-        high_pair = max(freq_sorted[0][0], freq_sorted[1][0])
-        low_pair = min(freq_sorted[0][0], freq_sorted[1][0])
-        kicker = freq_sorted[2][0] if len(freq_sorted) > 2 else 0
-        return (3, high_pair, low_pair, kicker)
-    if freq_sorted[0][1] == 2:
-        kickers = sorted([x[0] for x in freq_sorted[1:]], reverse=True)
-        return (2, freq_sorted[0][0]) + tuple(kickers)
-    return (1,) + tuple(ranks)
+        return (6,) + tuple(sorted((RANKS.index(c[0]) + 2 for c in cards_sorted), reverse=True))
+    if straight_top:
+        return (5, straight_top)
+    if trips:
+        return (4, trips, singles[0], singles[1]) if len(singles) >= 2 else (4, trips) + tuple(singles)
+    if len(pairs) >= 2:
+        kicker = singles[0] if singles else 0
+        return (3, pairs[0], pairs[1], kicker)
+    if len(pairs) == 1:
+        return (2, pairs[0]) + tuple(singles[:3])
+    return (1,) + tuple(singles[:5])
 
 
 def _eval5(cards):

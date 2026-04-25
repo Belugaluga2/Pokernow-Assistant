@@ -3107,6 +3107,345 @@ function eqRenderSaved() {
 // ===== Hand Picker (CSV-driven equity replay) =====
 let _hpSelected = null;
 
+// ===== Client-side equity engine (Web Worker) =====
+// Source for the worker. Inlined as a string so we can spawn workers via Blob URL
+// without needing a separate static file. The MC logic mirrors the Python backend
+// (compute_equity_double_board + side pots from committed amounts).
+const HP_WORKER_SRC = `
+'use strict';
+const RANK_MAP = {'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'T':10,'J':11,'Q':12,'K':13,'A':14};
+const SUIT_MAP = {'s':0,'h':1,'d':2,'c':3};
+
+function cardToInt(s) { return (RANK_MAP[s[0]] << 2) | SUIT_MAP[s[1]]; }
+function cardsStr(cards) { return cards.map(intToStr).join(' '); }
+const REV_RANK = ['','','2','3','4','5','6','7','8','9','T','J','Q','K','A'];
+const REV_SUIT = ['s','h','d','c'];
+function intToStr(c) { return REV_RANK[c >> 2] + REV_SUIT[c & 3]; }
+
+const STRAIGHT_MASKS = [];
+for (let top = 14; top >= 5; top--) STRAIGHT_MASKS.push([top, 0x1f << (top - 4)]);
+
+// Returns a comparable strength array. Bigger = better.
+function eval5(c0, c1, c2, c3, c4) {
+  const r0 = c0 >> 2, r1 = c1 >> 2, r2 = c2 >> 2, r3 = c3 >> 2, r4 = c4 >> 2;
+  const s0 = c0 & 3, s1 = c1 & 3, s2 = c2 & 3, s3 = c3 & 3, s4 = c4 & 3;
+  const isFlush = s0 === s1 && s1 === s2 && s2 === s3 && s3 === s4;
+
+  const cnt = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+  cnt[r0]++; cnt[r1]++; cnt[r2]++; cnt[r3]++; cnt[r4]++;
+  let mask = (1 << r0) | (1 << r1) | (1 << r2) | (1 << r3) | (1 << r4);
+  if (cnt[14]) mask |= 2;
+
+  let straightTop = 0;
+  for (let i = 0; i < STRAIGHT_MASKS.length; i++) {
+    const m = STRAIGHT_MASKS[i][1];
+    if ((mask & m) === m) { straightTop = STRAIGHT_MASKS[i][0]; break; }
+  }
+
+  if (isFlush && straightTop) return [9, straightTop];
+
+  let quads = 0, trips = 0;
+  const pairs = [], singles = [];
+  for (let r = 14; r >= 2; r--) {
+    const c = cnt[r];
+    if (c === 4) quads = r;
+    else if (c === 3) trips = r;
+    else if (c === 2) pairs.push(r);
+    else if (c === 1) singles.push(r);
+  }
+  if (quads) {
+    const kicker = singles.length ? singles[0] : (pairs.length ? pairs[0] : trips);
+    return [8, quads, kicker];
+  }
+  if (trips && pairs.length) return [7, trips, pairs[0]];
+  if (isFlush) {
+    const arr = [r0, r1, r2, r3, r4]; arr.sort((a, b) => b - a);
+    return [6, arr[0], arr[1], arr[2], arr[3], arr[4]];
+  }
+  if (straightTop) return [5, straightTop];
+  if (trips) return [4, trips, singles[0] || 0, singles[1] || 0];
+  if (pairs.length >= 2) return [3, pairs[0], pairs[1], singles[0] || 0];
+  if (pairs.length === 1) return [2, pairs[0], singles[0] || 0, singles[1] || 0, singles[2] || 0];
+  return [1, singles[0] || 0, singles[1] || 0, singles[2] || 0, singles[3] || 0, singles[4] || 0];
+}
+
+function strGreater(a, b) {
+  const n = a.length < b.length ? a.length : b.length;
+  for (let i = 0; i < n; i++) if (a[i] !== b[i]) return a[i] > b[i];
+  return false;
+}
+function strEqual(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+// PLO: must use exactly 2 from hole + 3 from board. holeCount in {2,4,5}.
+// For Hold'em we still call this with holeCount=2 (single C(2,2)*C(5,5)=1 path
+// wouldn't work — instead we just run eval5(hole + 3 of board) for all C(5,3) triples).
+// Simpler: always score by trying all 2-from-hole × 3-from-board combos. For Hold'em
+// holeCount=2 so only one h-pair; for PLO/PLO5 we iterate.
+const BOARD_TRIPLES = [];
+for (let a = 0; a < 5; a++)
+  for (let b = a+1; b < 5; b++)
+    for (let c = b+1; c < 5; c++)
+      BOARD_TRIPLES.push([a, b, c]);
+
+function scoreOmaha(hole, board) {
+  let best = null;
+  const n = hole.length;
+  for (let i = 0; i < n; i++) {
+    for (let j = i+1; j < n; j++) {
+      const h0 = hole[i], h1 = hole[j];
+      for (let t = 0; t < 10; t++) {
+        const tr = BOARD_TRIPLES[t];
+        const s = eval5(h0, h1, board[tr[0]], board[tr[1]], board[tr[2]]);
+        if (best === null || strGreater(s, best)) best = s;
+      }
+    }
+  }
+  return best;
+}
+
+function scoreHoldem(hole, board) {
+  // Best-of-7: try all C(5,3) board triples (the 2 hole cards are always used).
+  let best = null;
+  for (let t = 0; t < 10; t++) {
+    const tr = BOARD_TRIPLES[t];
+    const s = eval5(hole[0], hole[1], board[tr[0]], board[tr[1]], board[tr[2]]);
+    if (best === null || strGreater(s, best)) best = s;
+  }
+  // Also: 1-from-hole + 4-from-board
+  for (let i = 0; i < 2; i++) {
+    for (let skip = 0; skip < 5; skip++) {
+      const b = []; for (let k = 0; k < 5; k++) if (k !== skip) b.push(board[k]);
+      const s = eval5(hole[i], b[0], b[1], b[2], b[3]);
+      if (strGreater(s, best)) best = s;
+    }
+  }
+  // Also: play the board (5 board cards only)
+  const sb = eval5(board[0], board[1], board[2], board[3], board[4]);
+  if (strGreater(sb, best)) best = sb;
+  return best;
+}
+
+function buildPotsFromCommitted(committed, deadMoney) {
+  const indexed = committed.map((v, i) => [i, +v || 0]).filter(([i, v]) => v > 0);
+  if (!indexed.length) return null;
+  const caps = Array.from(new Set(indexed.map(p => p[1]))).sort((a, b) => a - b);
+  const pots = [];
+  let prev = 0; let first = true;
+  for (const cap of caps) {
+    const contrib = indexed.filter(p => p[1] >= cap).map(p => p[0]);
+    const layer = cap - prev;
+    if (layer > 0 && contrib.length) {
+      let pot = layer * contrib.length;
+      if (first && deadMoney > 0) { pot += deadMoney; first = false; }
+      pots.push([pot, new Set(contrib)]);
+    }
+    prev = cap;
+  }
+  return pots;
+}
+
+function shuffleInPlace(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = (Math.random() * (i + 1)) | 0;
+    const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+  }
+}
+
+function computeEquity(payload) {
+  const handsStr = payload.hands;          // [[card str, ...], ...]
+  const boardStr = payload.board || [];
+  const board2Str = payload.board2 || [];
+  const committed = payload.committed || null;
+  const deadMoney = +payload.dead_money || 0;
+  const trials = Math.max(1, Math.min(payload.trials | 0, 200000));
+
+  const isDouble = board2Str.length > 0;
+  const nPlayers = handsStr.length;
+  const nHole = handsStr[0].length;
+  const isOmaha = nHole >= 4;
+
+  const hands = handsStr.map(h => h.map(cardToInt));
+  const board1 = boardStr.map(cardToInt);
+  const board2 = board2Str.map(cardToInt);
+
+  const used = new Set();
+  for (const h of hands) for (const c of h) used.add(c);
+  for (const c of board1) used.add(c);
+  for (const c of board2) used.add(c);
+  const deck = [];
+  for (let i = 0; i < 52; i++) if (!used.has(i)) deck.push(i);
+
+  const missing1 = 5 - board1.length;
+  const missing2 = isDouble ? (5 - board2.length) : 0;
+  const totalMissing = missing1 + missing2;
+  if (missing1 < 0 || missing2 < 0 || totalMissing > deck.length) {
+    throw new Error('Invalid board sizes');
+  }
+
+  const score = isOmaha ? scoreOmaha : scoreHoldem;
+  const wins = Array.from({length: nPlayers}, () => [0, 0]);
+  const ties = Array.from({length: nPlayers}, () => [0, 0]);
+  const shareSum = new Array(nPlayers).fill(0);
+  const payouts = new Array(nPlayers).fill(0);
+  const pots = committed ? buildPotsFromCommitted(committed, deadMoney) : null;
+
+  const fb1 = new Array(5);
+  const fb2 = new Array(5);
+
+  for (let trial = 0; trial < trials; trial++) {
+    shuffleInPlace(deck);
+    for (let k = 0; k < 5; k++) fb1[k] = k < board1.length ? board1[k] : deck[k - board1.length];
+    if (isDouble) {
+      for (let k = 0; k < 5; k++) fb2[k] = k < board2.length ? board2[k] : deck[missing1 + (k - board2.length)];
+    }
+
+    const scores1 = hands.map(h => score(h, fb1));
+    const scores2 = isDouble ? hands.map(h => score(h, fb2)) : null;
+
+    let best1 = scores1[0]; for (let i = 1; i < nPlayers; i++) if (strGreater(scores1[i], best1)) best1 = scores1[i];
+    const winners1 = []; for (let i = 0; i < nPlayers; i++) if (strEqual(scores1[i], best1)) winners1.push(i);
+    let winners2 = null; let best2 = null;
+    if (isDouble) {
+      best2 = scores2[0]; for (let i = 1; i < nPlayers; i++) if (strGreater(scores2[i], best2)) best2 = scores2[i];
+      winners2 = []; for (let i = 0; i < nPlayers; i++) if (strEqual(scores2[i], best2)) winners2.push(i);
+    }
+
+    if (isDouble) {
+      const u1 = 1.0 / winners1.length, u2 = 1.0 / winners2.length;
+      const w1set = new Set(winners1), w2set = new Set(winners2);
+      for (let i = 0; i < nPlayers; i++) {
+        const s1 = w1set.has(i) ? u1 : 0;
+        const s2 = w2set.has(i) ? u2 : 0;
+        shareSum[i] += (s1 + s2) * 0.5;
+        if (w1set.has(i)) (winners1.length === 1 ? wins[i][0]++ : ties[i][0]++);
+        if (w2set.has(i)) (winners2.length === 1 ? wins[i][1]++ : ties[i][1]++);
+      }
+      if (pots) {
+        for (const [potSize, eligible] of pots) {
+          const half = potSize * 0.5;
+          const we1 = winners1.filter(i => eligible.has(i));
+          const we2 = winners2.filter(i => eligible.has(i));
+          if (we1.length) { const s = half / we1.length; for (const i of we1) payouts[i] += s; }
+          if (we2.length) { const s = half / we2.length; for (const i of we2) payouts[i] += s; }
+        }
+      }
+    } else {
+      const u = 1.0 / winners1.length;
+      const wset = new Set(winners1);
+      for (let i = 0; i < nPlayers; i++) {
+        if (wset.has(i)) {
+          shareSum[i] += u;
+          if (winners1.length === 1) wins[i][0]++; else ties[i][0]++;
+        }
+      }
+      if (pots) {
+        for (const [potSize, eligible] of pots) {
+          const we = winners1.filter(i => eligible.has(i));
+          if (we.length) { const s = potSize / we.length; for (const i of we) payouts[i] += s; }
+        }
+      }
+    }
+  }
+
+  const equities = [];
+  for (let i = 0; i < nPlayers; i++) {
+    const overall = trials ? (shareSum[i] / trials * 100) : 0;
+    const entry = { hand: handsStr[i].join(' '), equity: Math.round(overall * 10) / 10 };
+    if (isDouble) {
+      const b1 = trials ? ((wins[i][0] + ties[i][0] / 2) / trials * 100) : 0;
+      const b2 = trials ? ((wins[i][1] + ties[i][1] / 2) / trials * 100) : 0;
+      entry.board1 = { equity: Math.round(b1 * 10) / 10, wins: wins[i][0], ties: ties[i][0], losses: trials - wins[i][0] - ties[i][0] };
+      entry.board2 = { equity: Math.round(b2 * 10) / 10, wins: wins[i][1], ties: ties[i][1], losses: trials - wins[i][1] - ties[i][1] };
+    } else {
+      entry.wins = wins[i][0];
+      entry.ties = ties[i][0];
+    }
+    if (pots) entry.expected_payout = Math.round((payouts[i] / trials) * 100) / 100;
+    equities.push(entry);
+  }
+  return isDouble ? { mode: 'double', trials, equities } : { equities, trials };
+}
+
+self.onmessage = function(e) {
+  const {id, payload} = e.data;
+  try {
+    const result = computeEquity(payload);
+    self.postMessage({id, result});
+  } catch (err) {
+    self.postMessage({id, error: err.message || String(err)});
+  }
+};
+`;
+
+const _hpWorkerPool = (() => {
+  if (typeof Worker === 'undefined') return null;
+  try {
+    const blob = new Blob([HP_WORKER_SRC], {type: 'application/javascript'});
+    const url = URL.createObjectURL(blob);
+    const size = Math.max(1, Math.min(navigator.hardwareConcurrency || 4, 4));
+    const workers = [];
+    for (let i = 0; i < size; i++) workers.push(new Worker(url));
+    const busy = workers.map(() => false);
+    const queue = [];
+    let nextId = 1;
+    const dispatch = () => {
+      for (let i = 0; i < workers.length; i++) {
+        if (busy[i] || queue.length === 0) continue;
+        const job = queue.shift();
+        busy[i] = true;
+        const w = workers[i];
+        const onMsg = (e) => {
+          if (e.data.id !== job.id) return;
+          w.removeEventListener('message', onMsg);
+          busy[i] = false;
+          if (e.data.error) job.reject(new Error(e.data.error));
+          else job.resolve(e.data.result);
+          dispatch();
+        };
+        w.addEventListener('message', onMsg);
+        w.postMessage({id: job.id, payload: job.payload});
+      }
+    };
+    return {
+      run(payload) {
+        return new Promise((resolve, reject) => {
+          queue.push({id: nextId++, payload, resolve, reject});
+          dispatch();
+        });
+      },
+      size,
+    };
+  } catch (e) {
+    console.warn('Hand-Picker worker pool init failed, falling back to server:', e);
+    return null;
+  }
+})();
+
+async function _hpComputeEquity(payload) {
+  // Try worker pool first; fall back to /api/equity on any failure.
+  if (_hpWorkerPool) {
+    try {
+      return await _hpWorkerPool.run(payload);
+    } catch (e) {
+      console.warn('Worker MC failed, falling back to /api/equity:', e);
+    }
+  }
+  const res = await fetch('/api/equity', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Server returned ${res.status}`);
+  }
+  return await res.json();
+}
+
 function hpRefresh() {
   const emptyEl = document.getElementById('eqHpEmpty');
   const controlsEl = document.getElementById('eqHpControls');
@@ -3263,16 +3602,7 @@ async function hpCalculate() {
       dead_money: +snap.deadMoney || 0,
       trials: 2500,
     };
-    const res = await fetch('/api/equity', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `Server returned ${res.status}`);
-    }
-    const data = await res.json();
+    const data = await _hpComputeEquity(payload);
     hpRenderResults(snap, data);
   } catch (e) {
     resultsEl.style.display = 'block';
@@ -3515,13 +3845,7 @@ async function hpCalculateAll() {
       trials: 2500,
     };
     try {
-      const res = await fetch('/api/equity', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      const data = await res.json();
+      const data = await _hpComputeEquity(payload);
       const eq = (data.equities || [])[playerIdx];
       if (eq && typeof eq.expected_payout === 'number') {
         const expectedNet = eq.expected_payout - committed;
