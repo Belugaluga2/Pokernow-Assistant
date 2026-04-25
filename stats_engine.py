@@ -17,7 +17,9 @@ Event type constants (verified from PokerNow JSON):
   ALLIN_APPROVAL=14, END_OF_HAND=15, REFUND=16, BOUNTIES=18
 """
 
+import functools
 import itertools
+import os
 import random
 from collections import defaultdict
 
@@ -801,6 +803,15 @@ def _compute_deltas(hand):
     return deltas
 
 
+def _compute_pot_size(hand):
+    """Total chips committed to the pot (post-refund) — what was paid out at showdown."""
+    events = hand.get('events', [])
+    if not events:
+        return 0.0
+    committed, _ = _contribs_until(hand, len(events) - 1)
+    return float(sum(committed.values()))
+
+
 # ── All-in EV (optional, requires eval7) ─────────────────────────────────
 
 try:
@@ -1330,6 +1341,8 @@ def compute_hand_history(hands):
         hole_cards = _collect_hole_cards(hand)
         board1, board2 = _board_up_to(hand, len(hand.get('events', [])) - 1)
         db_outcomes = _double_board_outcomes(hand) if board2 else {}
+        pot_size = round(_compute_pot_size(hand) * scale, 2)
+        allin_snapshot, allin_surviving_seats = _build_allin_snapshot(hand, hole_cards, scale)
 
         for p in hand.get('players', []):
             name = p['name']
@@ -1337,7 +1350,7 @@ def compute_hand_history(hands):
             cards = [c for c in cards if c]
             delta = round(deltas.get(name, 0.0) * scale, 2)
 
-            entry = {'hand': hand.get('number', ''), 'delta': delta}
+            entry = {'hand': hand.get('number', ''), 'delta': delta, 'potSize': pot_size}
             if cards:
                 entry['cards'] = cards
             if board1:
@@ -1352,10 +1365,72 @@ def compute_hand_history(hands):
             outcome = db_outcomes.get(p['seat'])
             if outcome:
                 entry['dbOutcome'] = outcome
+            if allin_snapshot and p['seat'] in allin_surviving_seats:
+                entry['allinSnapshot'] = allin_snapshot
 
             history[name].append(entry)
 
     return dict(history)
+
+
+def _build_allin_snapshot(hand, hole_cards, scale):
+    """Snapshot of the all-in lock point for equity replay.
+
+    Returns (snapshot_dict, surviving_seats_set) or (None, set()) if no analyzable lock.
+    Skips river all-ins (trivial equity) and locks where no surviving player has known cards.
+    """
+    lock_idx = _find_allin_lock(hand)
+    if lock_idx is None:
+        return None, set()
+
+    board1, board2 = _board_up_to(hand, lock_idx)
+    n1 = len(board1 or [])
+    if n1 >= 5:
+        return None, set()
+    if n1 == 0:
+        street = 'preflop'
+    elif n1 == 3:
+        street = 'flop'
+    elif n1 == 4:
+        street = 'turn'
+    else:
+        return None, set()
+
+    _, folded = _contribs_until(hand, lock_idx)
+    # Committed at the FINAL pot (post-refund), so net EV uses what the player actually put in.
+    final_committed, _ = _contribs_until(hand, len(hand.get('events', [])) - 1)
+    seat_to_name = {p['seat']: p['name'] for p in hand.get('players', [])}
+    survivors = []
+    surviving_seats = set()
+    for seat, name in seat_to_name.items():
+        if seat in folded:
+            continue
+        cards = [c for c in (hole_cards.get(seat) or []) if c]
+        if len(cards) < 2:
+            continue
+        survivors.append({
+            'name': name,
+            'cards': cards,
+            'committed': round(final_committed.get(seat, 0.0) * scale, 2),
+        })
+        surviving_seats.add(seat)
+
+    if not survivors:
+        return None, set()
+
+    pot = round(_compute_pot_size(hand) * scale, 2)
+    survivor_total = round(sum(p['committed'] for p in survivors), 2)
+    snap = {
+        'street': street,
+        'board': board1 or [],
+        'players': survivors,
+        'gameType': hand.get('gameType', ''),
+        'pot': pot,
+        'deadMoney': round(max(0.0, pot - survivor_total), 2),
+    }
+    if board2:
+        snap['board2'] = board2
+    return snap, surviving_seats
 
 
 # ── Equity calculator ────────────────────────────────────────────────────
@@ -1372,10 +1447,14 @@ def _suit_char(card):
     return card[1]
 
 
-def _eval5(cards):
-    """Evaluate a 5-card hand. Returns a comparable tuple (category, tiebreakers)."""
-    ranks = sorted((_rank_int(c) for c in cards), reverse=True)
-    suits = [_suit_char(c) for c in cards]
+@functools.lru_cache(maxsize=None)
+def _eval5_cached(cards_sorted):
+    """Evaluate a 5-card hand. Input MUST be a sorted tuple of 5 card strings.
+    Returns a comparable tuple (category, tiebreakers). Memoized — same 5 cards
+    in any order map to the same cache entry via the sorted-tuple key.
+    """
+    ranks = sorted((_rank_int(c) for c in cards_sorted), reverse=True)
+    suits = [_suit_char(c) for c in cards_sorted]
 
     is_flush = len(set(suits)) == 1
 
@@ -1422,6 +1501,25 @@ def _eval5(cards):
     return (1,) + tuple(ranks)
 
 
+def _eval5(cards):
+    """Public eval: accepts list/tuple in any order, returns strength tuple."""
+    return _eval5_cached(tuple(sorted(cards)))
+
+
+def prebuild_eval5_cache():
+    """Eagerly populate the _eval5 cache with all C(52,5) = 2,598,960 entries.
+    Takes ~30-60s of pure-Python compute on Python 3.14. Skipped by default;
+    enabled per worker via MC_PREBUILD=1 env var.
+    """
+    all_cards = sorted(r + s for r in '23456789TJQKA' for s in 'shdc')
+    for combo in itertools.combinations(all_cards, 5):
+        # combinations on a sorted list yields sorted tuples already.
+        _eval5_cached(combo)
+    return _eval5_cached.cache_info()
+
+
+
+
 def _best5of7(seven_cards):
     best = None
     for combo in itertools.combinations(seven_cards, 5):
@@ -1431,7 +1529,7 @@ def _best5of7(seven_cards):
     return best
 
 
-def compute_equity(player_hands, board=None, dead=None, trials=100000):
+def compute_equity(player_hands, board=None, dead=None, trials=100000, committed=None, dead_money=0.0):
     """Monte Carlo equity calculator. Supports Hold'em, PLO4, PLO5.
 
     Uses eval7 (C extension) when available for ~30-100x speedup.
@@ -1443,8 +1541,12 @@ def compute_equity(player_hands, board=None, dead=None, trials=100000):
         board: optional list of community cards (0-5)
         dead: optional list of dead/removed cards (e.g. folded but shown)
         trials: number of MC simulations (auto-scaled down for Omaha)
+        committed: optional list of $ committed per player (parallel to player_hands).
+                   When provided, side pots are built and per-player expected_payout
+                   ($ value) is included in each equity entry.
+        dead_money: chips committed by folded players (added to main pot).
 
-    Returns {"equities": [{"hand","equity","wins","ties"}], "trials": int}
+    Returns {"equities": [{"hand","equity","wins","ties","expected_payout"?}], "trials": int}
     """
     if board is None:
         board = []
@@ -1462,12 +1564,288 @@ def compute_equity(player_hands, board=None, dead=None, trials=100000):
         evals_per_trial = n_players * combos_per_player
         trials = min(trials, max(1000, 4_000_000 // max(evals_per_trial, 1)))
 
+    pots = _build_pots_from_committed(committed, n_players, dead_money) if committed else None
+
     if _HAVE_EVAL7:
-        return _equity_eval7(player_hands, board, dead, trials, is_omaha, missing, n_players)
-    return _equity_fallback(player_hands, board, dead, trials, is_omaha, missing, n_players)
+        return _equity_eval7(player_hands, board, dead, trials, is_omaha, missing, n_players, pots)
+    return _equity_fallback(player_hands, board, dead, trials, is_omaha, missing, n_players, pots)
 
 
-def _equity_eval7(player_hands, board, dead, trials, is_omaha, missing, n_players):
+def compute_equity_double_board(player_hands, board1, board2, dead=None, trials=2500, committed=None, dead_money=0.0):
+    """Monte Carlo equity for a double-board (run-it-twice / bomb-pot) all-in.
+
+    Per-trial pot share for player i = mean(share_on_b1, share_on_b2),
+    where share_on_b = 1/len(winners_b) if i in winners_b else 0.
+    Both boards draw missing cards from the SAME shuffled deck per trial.
+
+    If `committed` (parallel list of $ amounts) is provided, side pots are built
+    from those committed amounts (plus optional `dead_money` from folded players),
+    each pot is awarded 50/50 across the two boards per trial, and per-player
+    `expected_payout` (in $) is returned. This is the only correct way to compute
+    expected $ when the all-in created side pots.
+
+    Returns {
+      "mode": "double",
+      "trials": int,
+      "equities": [{
+        "hand": "As Kh ...",
+        "equity": float,                          # overall (avg of board shares)
+        "board1": {"equity": float, "wins": int, "ties": int, "losses": int},
+        "board2": {"equity": float, "wins": int, "ties": int, "losses": int},
+        "expected_payout": float,                 # only when committed provided
+      }, ...],
+    }
+    """
+    if dead is None:
+        dead = []
+    board1 = list(board1 or [])
+    board2 = list(board2 or [])
+
+    n_players = len(player_hands)
+    n_hole = max((len(h) for h in player_hands), default=0)
+    is_omaha = n_hole >= 4
+
+    trials = max(1, min(int(trials or 0), 200_000))
+
+    pots = _build_pots_from_committed(committed, n_players, dead_money) if committed else None
+
+    if _HAVE_EVAL7:
+        return _equity_double_eval7(player_hands, board1, board2, dead, trials, is_omaha, n_players, pots)
+    return _equity_double_fallback(player_hands, board1, board2, dead, trials, is_omaha, n_players, pots)
+
+
+def _build_pots_from_committed(committed, n_players, dead_money=0.0):
+    """Build (pot_size, eligible_indices_set) layers from a list of per-player committed $.
+
+    Mirrors _build_pots() but indexed by player position rather than seat. `dead_money`
+    (chips committed by folded players) is added to the smallest layer (the main pot
+    everyone is eligible for) since folded chips go to whoever wins the main pot.
+    """
+    committed = [float(c or 0) for c in committed]
+    if len(committed) != n_players:
+        return None
+    nonzero = [(i, v) for i, v in enumerate(committed) if v > 0]
+    if not nonzero:
+        return None
+    caps = sorted({v for _, v in nonzero})
+    pots = []
+    prev = 0.0
+    first = True
+    for cap in caps:
+        contributors = [i for i, v in nonzero if v >= cap]
+        layer = cap - prev
+        if layer > 0 and contributors:
+            pot_size = layer * len(contributors)
+            if first and dead_money > 0:
+                pot_size += dead_money
+                first = False
+            pots.append((pot_size, set(contributors)))
+        prev = cap
+    return pots
+
+
+def _equity_double_eval7(player_hands, board1, board2, dead, trials, is_omaha, n_players, pots=None):
+    used = set()
+    for h in player_hands:
+        used.update(h)
+    used.update(board1)
+    used.update(board2)
+    used.update(dead)
+
+    e7_hole = [[eval7.Card(c) for c in h] for h in player_hands]
+    e7_board1 = [eval7.Card(c) for c in board1]
+    e7_board2 = [eval7.Card(c) for c in board2]
+    deck = [eval7.Card(r + s) for r in RANKS for s in SUITS if (r + s) not in used]
+
+    missing1 = 5 - len(board1)
+    missing2 = 5 - len(board2)
+    total_missing = missing1 + missing2
+
+    if missing1 < 0 or missing2 < 0 or total_missing > len(deck):
+        raise ValueError('Invalid board sizes')
+
+    wins = [[0, 0] for _ in range(n_players)]
+    ties = [[0, 0] for _ in range(n_players)]
+    share_sum = [0.0] * n_players
+    payouts = [0.0] * n_players
+
+    def score(hole_e7, board_e7):
+        if is_omaha:
+            return _best_omaha_hand(hole_e7, board_e7)
+        return eval7.evaluate(hole_e7 + board_e7)
+
+    for _ in range(trials):
+        random.shuffle(deck)
+        draw = deck[:total_missing]
+        fb1 = e7_board1 + draw[:missing1]
+        fb2 = e7_board2 + draw[missing1:total_missing]
+        scores1 = [score(h, fb1) for h in e7_hole]
+        scores2 = [score(h, fb2) for h in e7_hole]
+        best1 = max(scores1)
+        best2 = max(scores2)
+        winners1 = [i for i in range(n_players) if scores1[i] == best1]
+        winners2 = [i for i in range(n_players) if scores2[i] == best2]
+        share1_unit = 1.0 / len(winners1)
+        share2_unit = 1.0 / len(winners2)
+        for i in range(n_players):
+            s1 = share1_unit if i in winners1 else 0.0
+            s2 = share2_unit if i in winners2 else 0.0
+            share_sum[i] += (s1 + s2) / 2.0
+            if i in winners1:
+                if len(winners1) == 1:
+                    wins[i][0] += 1
+                else:
+                    ties[i][0] += 1
+            if i in winners2:
+                if len(winners2) == 1:
+                    wins[i][1] += 1
+                else:
+                    ties[i][1] += 1
+        if pots:
+            for pot_size, eligible in pots:
+                half = pot_size / 2.0
+                w1_eligible = [i for i in winners1 if i in eligible]
+                w2_eligible = [i for i in winners2 if i in eligible]
+                if w1_eligible:
+                    share = half / len(w1_eligible)
+                    for i in w1_eligible:
+                        payouts[i] += share
+                if w2_eligible:
+                    share = half / len(w2_eligible)
+                    for i in w2_eligible:
+                        payouts[i] += share
+
+    equities = []
+    for i in range(n_players):
+        b1_eq = (wins[i][0] + ties[i][0] / 2.0) / trials * 100 if trials else 0
+        b2_eq = (wins[i][1] + ties[i][1] / 2.0) / trials * 100 if trials else 0
+        overall = share_sum[i] / trials * 100 if trials else 0
+        entry = {
+            'hand': ' '.join(player_hands[i]),
+            'equity': round(overall, 1),
+            'board1': {
+                'equity': round(b1_eq, 1),
+                'wins': wins[i][0],
+                'ties': ties[i][0],
+                'losses': trials - wins[i][0] - ties[i][0],
+            },
+            'board2': {
+                'equity': round(b2_eq, 1),
+                'wins': wins[i][1],
+                'ties': ties[i][1],
+                'losses': trials - wins[i][1] - ties[i][1],
+            },
+        }
+        if pots:
+            entry['expected_payout'] = round(payouts[i] / trials, 2) if trials else 0.0
+        equities.append(entry)
+    return {'mode': 'double', 'trials': trials, 'equities': equities}
+
+
+def _equity_double_fallback(player_hands, board1, board2, dead, trials, is_omaha, n_players, pots=None):
+    """Pure-Python double-board MC for when eval7 is missing. Slow for Omaha — caller should keep trials modest."""
+    used = set()
+    for h in player_hands:
+        used.update(h)
+    used.update(board1)
+    used.update(board2)
+    used.update(dead)
+    deck = [r + s for r in RANKS for s in SUITS if (r + s) not in used]
+
+    missing1 = 5 - len(board1)
+    missing2 = 5 - len(board2)
+    total_missing = missing1 + missing2
+
+    if missing1 < 0 or missing2 < 0 or total_missing > len(deck):
+        raise ValueError('Invalid board sizes')
+
+    if is_omaha and trials > 3000:
+        trials = 3000
+
+    wins = [[0, 0] for _ in range(n_players)]
+    ties = [[0, 0] for _ in range(n_players)]
+    share_sum = [0.0] * n_players
+    payouts = [0.0] * n_players
+
+    def score(hole, board_full):
+        if is_omaha:
+            best = None
+            for h2 in itertools.combinations(hole, 2):
+                for b3 in itertools.combinations(board_full, 3):
+                    s = _eval5(list(h2) + list(b3))
+                    if best is None or s > best:
+                        best = s
+            return best
+        return _best5of7(hole + board_full)
+
+    for _ in range(trials):
+        drawn = random.sample(deck, total_missing)
+        fb1 = board1 + drawn[:missing1]
+        fb2 = board2 + drawn[missing1:total_missing]
+        scores1 = [score(h, fb1) for h in player_hands]
+        scores2 = [score(h, fb2) for h in player_hands]
+        best1 = max(scores1)
+        best2 = max(scores2)
+        winners1 = [i for i in range(n_players) if scores1[i] == best1]
+        winners2 = [i for i in range(n_players) if scores2[i] == best2]
+        share1_unit = 1.0 / len(winners1)
+        share2_unit = 1.0 / len(winners2)
+        for i in range(n_players):
+            s1 = share1_unit if i in winners1 else 0.0
+            s2 = share2_unit if i in winners2 else 0.0
+            share_sum[i] += (s1 + s2) / 2.0
+            if i in winners1:
+                if len(winners1) == 1:
+                    wins[i][0] += 1
+                else:
+                    ties[i][0] += 1
+            if i in winners2:
+                if len(winners2) == 1:
+                    wins[i][1] += 1
+                else:
+                    ties[i][1] += 1
+        if pots:
+            for pot_size, eligible in pots:
+                half = pot_size / 2.0
+                w1_eligible = [i for i in winners1 if i in eligible]
+                w2_eligible = [i for i in winners2 if i in eligible]
+                if w1_eligible:
+                    share = half / len(w1_eligible)
+                    for i in w1_eligible:
+                        payouts[i] += share
+                if w2_eligible:
+                    share = half / len(w2_eligible)
+                    for i in w2_eligible:
+                        payouts[i] += share
+
+    equities = []
+    for i in range(n_players):
+        b1_eq = (wins[i][0] + ties[i][0] / 2.0) / trials * 100 if trials else 0
+        b2_eq = (wins[i][1] + ties[i][1] / 2.0) / trials * 100 if trials else 0
+        overall = share_sum[i] / trials * 100 if trials else 0
+        entry = {
+            'hand': ' '.join(player_hands[i]),
+            'equity': round(overall, 1),
+            'board1': {
+                'equity': round(b1_eq, 1),
+                'wins': wins[i][0],
+                'ties': ties[i][0],
+                'losses': trials - wins[i][0] - ties[i][0],
+            },
+            'board2': {
+                'equity': round(b2_eq, 1),
+                'wins': wins[i][1],
+                'ties': ties[i][1],
+                'losses': trials - wins[i][1] - ties[i][1],
+            },
+        }
+        if pots:
+            entry['expected_payout'] = round(payouts[i] / trials, 2) if trials else 0.0
+        equities.append(entry)
+    return {'mode': 'double', 'trials': trials, 'equities': equities}
+
+
+def _equity_eval7(player_hands, board, dead, trials, is_omaha, missing, n_players, pots=None):
     """Equity calculation using eval7 C extension."""
     used = set()
     for h in player_hands:
@@ -1481,7 +1859,22 @@ def _equity_eval7(player_hands, board, dead, trials, is_omaha, missing, n_player
 
     wins = [0] * n_players
     ties = [0] * n_players
+    payouts = [0.0] * n_players
     total = 0
+
+    def record(winners):
+        if len(winners) == 1:
+            wins[winners[0]] += 1
+        else:
+            for w in winners:
+                ties[w] += 1
+        if pots:
+            for pot_size, eligible in pots:
+                w_eligible = [i for i in winners if i in eligible]
+                if w_eligible:
+                    share = pot_size / len(w_eligible)
+                    for i in w_eligible:
+                        payouts[i] += share
 
     if missing == 0:
         # Board complete — single evaluation
@@ -1492,11 +1885,7 @@ def _equity_eval7(player_hands, board, dead, trials, is_omaha, missing, n_player
         best = max(scores)
         winners = [i for i in range(n_players) if scores[i] == best]
         total = 1
-        if len(winners) == 1:
-            wins[winners[0]] = 1
-        else:
-            for w in winners:
-                ties[w] = 1
+        record(winners)
 
     elif not is_omaha and missing <= 2:
         # Hold'em: exact enumeration when only 1-2 cards to come
@@ -1506,11 +1895,7 @@ def _equity_eval7(player_hands, board, dead, trials, is_omaha, missing, n_player
             best = max(scores)
             winners = [i for i in range(n_players) if scores[i] == best]
             total += 1
-            if len(winners) == 1:
-                wins[winners[0]] += 1
-            else:
-                for w in winners:
-                    ties[w] += 1
+            record(winners)
 
     elif is_omaha and missing <= 2:
         # Omaha exact enumeration (flop: C(39,2)=741, turn: 38 runouts)
@@ -1537,11 +1922,7 @@ def _equity_eval7(player_hands, board, dead, trials, is_omaha, missing, n_player
             best_score = max(scores)
             winners = [i for i in range(n_players) if scores[i] == best_score]
             total += 1
-            if len(winners) == 1:
-                wins[winners[0]] += 1
-            else:
-                for w in winners:
-                    ties[w] += 1
+            record(winners)
 
     elif is_omaha:
         # Omaha MC with pre-computed combos and reusable eval buffer
@@ -1569,11 +1950,7 @@ def _equity_eval7(player_hands, board, dead, trials, is_omaha, missing, n_player
             best_score = max(scores)
             winners = [i for i in range(n_players) if scores[i] == best_score]
             total += 1
-            if len(winners) == 1:
-                wins[winners[0]] += 1
-            else:
-                for w in winners:
-                    ties[w] += 1
+            record(winners)
 
     else:
         # Hold'em Monte Carlo
@@ -1584,21 +1961,20 @@ def _equity_eval7(player_hands, board, dead, trials, is_omaha, missing, n_player
             best = max(scores)
             winners = [i for i in range(n_players) if scores[i] == best]
             total += 1
-            if len(winners) == 1:
-                wins[winners[0]] += 1
-            else:
-                for w in winners:
-                    ties[w] += 1
+            record(winners)
 
     results = []
     for i in range(n_players):
         eq = (wins[i] + ties[i] / 2.0) / total * 100 if total > 0 else 0
-        results.append({
+        entry = {
             'hand': ' '.join(player_hands[i]),
             'equity': round(eq, 1),
             'wins': wins[i],
             'ties': ties[i],
-        })
+        }
+        if pots:
+            entry['expected_payout'] = round(payouts[i] / total, 2) if total else 0.0
+        results.append(entry)
     return {'equities': results, 'trials': total}
 
 
@@ -1635,7 +2011,7 @@ def compute_river_outs(player_hands, board, dead=None):
     return results
 
 
-def _equity_fallback(player_hands, board, dead, trials, is_omaha, missing, n_players):
+def _equity_fallback(player_hands, board, dead, trials, is_omaha, missing, n_players, pots=None):
     """Pure Python equity calculation (fallback when eval7 unavailable)."""
     used = set()
     for h in player_hands:
@@ -1649,6 +2025,7 @@ def _equity_fallback(player_hands, board, dead, trials, is_omaha, missing, n_pla
 
     wins = [0] * n_players
     ties = [0] * n_players
+    payouts = [0.0] * n_players
     total = 0
 
     for _ in range(trials):
@@ -1676,14 +2053,24 @@ def _equity_fallback(player_hands, board, dead, trials, is_omaha, missing, n_pla
         else:
             for w in winners:
                 ties[w] += 1
+        if pots:
+            for pot_size, eligible in pots:
+                w_eligible = [i for i in winners if i in eligible]
+                if w_eligible:
+                    share = pot_size / len(w_eligible)
+                    for i in w_eligible:
+                        payouts[i] += share
 
     results = []
     for i in range(n_players):
         eq = (wins[i] + ties[i] / 2.0) / total * 100 if total > 0 else 0
-        results.append({
+        entry = {
             'hand': ' '.join(player_hands[i]),
             'equity': round(eq, 1),
             'wins': wins[i],
             'ties': ties[i],
-        })
+        }
+        if pots:
+            entry['expected_payout'] = round(payouts[i] / total, 2) if total else 0.0
+        results.append(entry)
     return {'equities': results, 'trials': total}

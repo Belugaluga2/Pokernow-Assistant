@@ -21,13 +21,31 @@ import requests as req_lib
 import socketio
 
 import os
+from concurrent.futures import ProcessPoolExecutor
 
 from csv_parser import parse_hand_data
 from stats_engine import (
     compute_all_stats, compute_winnings, compute_allin_ev,
-    compute_equity, compute_river_outs, compute_hand_history, compute_biggest_pots, has_eval7,
+    compute_equity, compute_equity_double_board, compute_river_outs, compute_hand_history, compute_biggest_pots, has_eval7,
+    prebuild_eval5_cache,
 )
 from equity_categories import list_valid_categories, generate_hands
+
+# Worker pool for CPU-bound MC equity calls. Initialized in __main__ so Windows spawn
+# semantics work; falls back to in-process when imported (tests, REPL).
+_MC_POOL = None
+
+
+def _run_mc(fn, *args, **kwargs):
+    if _MC_POOL is None:
+        return fn(*args, **kwargs)
+    return _MC_POOL.submit(fn, *args, **kwargs).result()
+
+
+def _worker_init():
+    """Runs once per pool worker on spawn. Optionally pre-fills the _eval5 cache."""
+    if os.environ.get('MC_PREBUILD') == '1':
+        prebuild_eval5_cache()
 
 PORT = int(os.environ.get('PORT', 8000))
 CURL = shutil.which('curl') or shutil.which('curl.exe') or 'curl'
@@ -516,14 +534,28 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 body = json.loads(self.rfile.read(length).decode('utf-8'))
                 player_hands = body.get('hands', [])
                 board = body.get('board', [])
+                board2 = body.get('board2', []) or []
                 dead = body.get('dead', [])
                 trials = min(body.get('trials', 100000), 200000)
+                committed = body.get('committed') or None
+                dead_money = float(body.get('dead_money') or 0.0)
 
                 if len(player_hands) < 2:
                     self._json_response(400, {'error': 'Need at least 2 hands'})
                     return
 
-                result = compute_equity(player_hands, board, dead, trials)
+                if board2 and len(board2) >= 0 and any(c for c in board2):
+                    result = _run_mc(
+                        compute_equity_double_board,
+                        player_hands, board, board2, dead, trials,
+                        committed=committed, dead_money=dead_money,
+                    )
+                else:
+                    result = _run_mc(
+                        compute_equity,
+                        player_hands, board, dead, trials,
+                        committed=committed, dead_money=dead_money,
+                    )
                 self._json_response(200, result)
             except Exception as e:
                 print(f'  ERROR equity: {e}')
@@ -839,11 +871,18 @@ class ThreadedServer(http.server.ThreadingHTTPServer):
 
 
 if __name__ == '__main__':
+    cpu = os.cpu_count() or 2
+    workers = max(1, min(int(os.environ.get('MC_WORKERS', cpu - 1)), 8))
+    prebuild = os.environ.get('MC_PREBUILD') == '1'
+    _MC_POOL = ProcessPoolExecutor(max_workers=workers, initializer=_worker_init)
     with ThreadedServer(('0.0.0.0', PORT), Handler) as server:
         print(f'PokerNow Assistant running at http://localhost:{PORT}')
         print(f'  eval7 available: {has_eval7()}')
+        print(f'  MC workers: {workers}{" (prebuilding 5-card cache, ~30-60s on first batch)" if prebuild else ""}')
         print('Press Ctrl+C to stop.\n')
         try:
             server.serve_forever()
         except KeyboardInterrupt:
             print('\nStopped.')
+        finally:
+            _MC_POOL.shutdown(wait=False, cancel_futures=True)

@@ -629,6 +629,75 @@
   .eq-result-labels { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
   .eq-result-label { font-size: 0.85rem; font-weight: 700; }
   .eq-hands-display { margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary); }
+
+  /* Poker-table visualization for the Hand Picker */
+  .hp-table {
+    background: radial-gradient(ellipse at center, #0f3a26 0%, #0a2818 70%);
+    border: 1px solid rgba(34, 197, 94, 0.18);
+    border-radius: 16px;
+    padding: 1.25rem 1rem;
+    margin: 0.5rem 0 1rem;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 4px 16px rgba(0,0,0,0.25);
+  }
+  .hp-table-players {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  .hp-seat {
+    background: rgba(0,0,0,0.32);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 0.5rem 0.75rem;
+    min-width: 9rem;
+    text-align: center;
+  }
+  .hp-seat.you {
+    border-color: rgba(52, 211, 153, 0.55);
+    box-shadow: 0 0 0 1px rgba(52,211,153,0.18);
+    background: rgba(8,30,20,0.6);
+  }
+  .hp-seat-name { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; margin-bottom: 0.35rem; }
+  .hp-seat-cards { display: flex; gap: 0.25rem; justify-content: center; flex-wrap: wrap; }
+  .hp-seat-equity { font-size: 0.7rem; color: rgba(255,255,255,0.55); margin-top: 0.3rem; letter-spacing: 0.04em; }
+
+  .hp-board-row {
+    display: flex; align-items: center; gap: 0.6rem; justify-content: center;
+    margin: 0.4rem 0;
+  }
+  .hp-board-label {
+    color: rgba(255,255,255,0.5);
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    width: 3.5rem;
+    text-align: right;
+  }
+  .hp-board-cards { display: flex; gap: 0.3rem; }
+
+  .hp-card {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 2.2rem; height: 2.7rem; padding: 0 0.35rem;
+    background: #fafafa;
+    border: 1px solid rgba(0,0,0,0.15);
+    border-radius: 5px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 1rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.4);
+    color: #111;
+  }
+  .hp-card.suit-h, .hp-card.suit-d { color: #c0212e; }
+  .hp-card.suit-s, .hp-card.suit-c { color: #111; }
+  .hp-card.placeholder {
+    background: rgba(255,255,255,0.06);
+    border: 1px dashed rgba(255,255,255,0.18);
+    color: rgba(255,255,255,0.3);
+    box-shadow: none;
+  }
+  [data-theme="light"] .hp-table {
+    background: radial-gradient(ellipse at center, #166c4a 0%, #0e4a32 70%);
+    border-color: rgba(34, 197, 94, 0.3);
+  }
   .eq-action-btn {
     padding: 0.5rem 1.25rem; border-radius: 20px; font-weight: 500;
     border: 1px solid var(--border-default); cursor: pointer; font-size: 0.82rem; font-family: inherit;
@@ -1044,6 +1113,35 @@
         </div>
       </div>
 
+      <!-- Hand Picker from Uploaded CSV -->
+      <div class="card" id="eqHandPickerCard">
+        <h2>Pick Hand from Uploaded Game</h2>
+        <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:0.75rem;">Upload a CSV on the Stats tab, then browse real hands from that game. Select a hand where a player went all-in pre-river and calculate equity with 2500 MC trials.</p>
+        <div id="eqHpEmpty" style="color:var(--text-tertiary);font-size:0.85rem;">No CSV uploaded yet. Upload one on the Stats tab to browse hands.</div>
+        <div id="eqHpControls" style="display:none;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+          <label style="color:var(--text-tertiary);font-size:0.8rem;display:flex;align-items:center;gap:0.4rem;">
+            Player
+            <select id="eqHpPlayer" style="padding:0.35rem 0.5rem;background:var(--bg-input);border:1px solid var(--border-default);color:var(--text-primary);border-radius:4px;font-size:0.8rem;"></select>
+          </label>
+          <span id="eqHpCount" style="color:var(--text-muted);font-size:0.75rem;"></span>
+        </div>
+        <div id="eqHpList" style="display:none;max-height:340px;overflow-y:auto;border:1px solid var(--border-subtle);border-radius:6px;"></div>
+        <div id="eqHpActionRow" style="display:none;align-items:center;gap:1rem;margin-top:0.75rem;flex-wrap:wrap;">
+          <button class="eq-calc-btn" id="eqHpCalcBtn" disabled onclick="hpCalculate()">Calculate Equity (2500 trials)</button>
+          <button class="eq-calc-btn" id="eqHpCalcAllBtn" onclick="hpCalculateAll()">Net Equity Across All Ins</button>
+          <button class="eq-calc-btn" id="eqHpStopAllBtn" onclick="hpStopAll()" style="display:none;background:linear-gradient(135deg,#ef4444,#dc2626);border-color:#b91c1c;">Stop</button>
+          <span id="eqHpCalcHint" style="color:var(--text-muted);font-size:0.75rem;"></span>
+          <span id="eqHpSpinner" style="display:none;"><span class="eq-spinner"></span></span>
+        </div>
+        <div id="eqHpResults" style="display:none;margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border-subtle);">
+          <div id="eqHpResultsInfo" style="color:var(--text-tertiary);font-size:0.8rem;margin-bottom:0.5rem;"></div>
+          <div id="eqHpTable"></div>
+          <div class="eq-result-labels" id="eqHpResultLabels"></div>
+          <div class="eq-result-bar" id="eqHpResultBar"></div>
+        </div>
+        <div id="eqHpAggResults" style="display:none;margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border-subtle);"></div>
+      </div>
+
       <!-- Saved Results -->
       <div class="card" id="eqSavedCard" style="display:none;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
@@ -1082,6 +1180,7 @@ function switchTab(name, btn) {
   if (btn) btn.classList.add('active');
   else document.querySelector(`[onclick*="'${name}'"]`).classList.add('active');
   document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'equity' && typeof hpRefresh === 'function') hpRefresh();
 }
 
 let _progressTimer = null;
@@ -1236,6 +1335,7 @@ const STAT_TABS = {
 function renderFullStats(data) {
   _statsData = data;
   _sortCol = null;
+  if (typeof hpRefresh === 'function') hpRefresh();
 
   // Show stats area
   document.getElementById('statsArea').style.display = 'block';
@@ -1450,6 +1550,7 @@ function renderEV(ev) {
   const pp = ev.perPlayer || {};
   const rows = ev.evRows || [];
   _evData = ev;
+  if (typeof hpRefresh === 'function') hpRefresh();
 
   // Get winnings data for net totals
   const wp = (_statsData && _statsData.winnings && _statsData.winnings.players) || {};
@@ -3003,8 +3104,509 @@ function eqRenderSaved() {
   }).join('');
 }
 
+// ===== Hand Picker (CSV-driven equity replay) =====
+let _hpSelected = null;
+
+function hpRefresh() {
+  const emptyEl = document.getElementById('eqHpEmpty');
+  const controlsEl = document.getElementById('eqHpControls');
+  const listEl = document.getElementById('eqHpList');
+  const actionEl = document.getElementById('eqHpActionRow');
+  const history = (typeof _statsData !== 'undefined' && _statsData && _statsData.handHistory) || {};
+  const players = Object.keys(history);
+  if (!players.length) {
+    emptyEl.style.display = '';
+    controlsEl.style.display = 'none';
+    listEl.style.display = 'none';
+    actionEl.style.display = 'none';
+    document.getElementById('eqHpResults').style.display = 'none';
+    return;
+  }
+  emptyEl.style.display = 'none';
+  controlsEl.style.display = 'flex';
+  listEl.style.display = '';
+  actionEl.style.display = 'flex';
+  players.sort((a, b) => a.localeCompare(b));
+  const sel = document.getElementById('eqHpPlayer');
+  const prev = sel.value;
+  sel.innerHTML = players.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+  if (prev && players.includes(prev)) sel.value = prev;
+  sel.onchange = hpRender;
+  hpRender();
+}
+
+function hpRender() {
+  const sel = document.getElementById('eqHpPlayer');
+  const player = sel.value;
+  const listEl = document.getElementById('eqHpList');
+  const countEl = document.getElementById('eqHpCount');
+  const history = (typeof _statsData !== 'undefined' && _statsData && _statsData.handHistory) || {};
+  const hands = (history[player] || []).slice();
+
+  // Partition: small-loss (-10 <= delta <= 0) goes to bottom; others on top. Sort each by potSize desc.
+  const active = [];
+  const smallLoss = [];
+  for (const h of hands) {
+    if (h.delta > 0 || h.delta < -10) active.push(h);
+    else smallLoss.push(h);
+  }
+  const byPotDesc = (a, b) => (b.potSize || 0) - (a.potSize || 0);
+  active.sort(byPotDesc);
+  smallLoss.sort(byPotDesc);
+  const ordered = active.concat(smallLoss);
+
+  countEl.textContent = ordered.length
+    ? `${ordered.length} hand${ordered.length === 1 ? '' : 's'}${smallLoss.length ? ` (${smallLoss.length} small-loss at bottom)` : ''}`
+    : '';
+
+  // Build EV-by-hand map for this player from _evData if available.
+  const evByHand = {};
+  if (typeof _evData !== 'undefined' && _evData && Array.isArray(_evData.evRows)) {
+    for (const row of _evData.evRows) {
+      const pl = (row.players || []).find(pp => pp.name === player);
+      if (pl) evByHand[String(row.handNumber)] = pl;
+    }
+  }
+
+  // Reset selection whenever list re-renders.
+  _hpSelected = null;
+  document.getElementById('eqHpCalcBtn').disabled = true;
+  document.getElementById('eqHpCalcHint').textContent = '';
+  document.getElementById('eqHpResults').style.display = 'none';
+
+  if (!ordered.length) {
+    listEl.innerHTML = '<div style="padding:0.75rem;color:var(--text-muted);font-size:0.85rem;">No hands recorded for this player.</div>';
+    return;
+  }
+
+  const gridCols = '7rem 4rem 1fr 1fr 5rem 5rem 5rem';
+  const header = `<div style="display:grid;grid-template-columns:${gridCols};gap:0.5rem;padding:0.45rem 0.6rem;border-bottom:1px solid var(--border-default);font-size:0.7rem;color:var(--text-tertiary);letter-spacing:0.06em;font-weight:700;background:rgba(255,255,255,0.02);position:sticky;top:0;">
+    <span>EQUITY</span>
+    <span>HAND</span><span>HOLE</span><span>BOARD</span>
+    <span style="text-align:right;">POT</span>
+    <span style="text-align:right;">${esc(player)} NET</span>
+    <span style="text-align:right;">A/I EV</span>
+  </div>`;
+
+  const rowsHtml = ordered.map(h => {
+    const isSmall = (h.delta > -10 && h.delta <= 0);
+    const selectable = !!h.allinSnapshot;
+    const dim = isSmall ? 'opacity:0.55;' : '';
+    const cursor = selectable ? 'cursor:pointer;' : 'cursor:not-allowed;';
+    const title = selectable
+      ? `Select hand #${h.hand} (${h.allinSnapshot.street} all-in)`
+      : 'No pre-river all-in for this player in this hand';
+    const cardsHtml = (h.cards && h.cards.length) ? _cards(h.cards) : '<span style="color:var(--text-muted);">—</span>';
+    const boardHtml = (h.board1 && h.board1.length) ? _cards(h.board1) : '<span style="color:var(--text-muted);">—</span>';
+    const pot = (h.potSize != null) ? `$${(+h.potSize).toFixed(2)}` : '—';
+    const deltaCol = h.delta > 0 ? '#22c55e' : (h.delta < 0 ? '#ef4444' : 'var(--text-secondary)');
+    const deltaStr = `${h.delta >= 0 ? '+' : ''}$${(+h.delta).toFixed(2)}`;
+    const evRow = evByHand[String(h.hand)];
+    let evStr = '<span style="color:var(--text-muted);">—</span>';
+    if (evRow && typeof evRow.ev === 'number') {
+      const sign = evRow.ev >= 0 ? '+' : '';
+      const col = evRow.ev >= 0 ? '#22c55e' : '#ef4444';
+      evStr = `<span style="color:${col};">${sign}$${evRow.ev.toFixed(2)}</span>`;
+    }
+    const statusBadge = selectable
+      ? `<span style="display:inline-flex;align-items:center;gap:0.25rem;padding:0.15rem 0.5rem;border-radius:10px;background:rgba(34,197,94,0.15);color:#22c55e;font-size:0.65rem;font-weight:700;letter-spacing:0.04em;border:1px solid rgba(34,197,94,0.3);">● ${esc(h.allinSnapshot.street.toUpperCase())}</span>`
+      : `<span style="display:inline-flex;align-items:center;gap:0.25rem;padding:0.15rem 0.5rem;border-radius:10px;background:rgba(148,163,184,0.1);color:var(--text-muted);font-size:0.65rem;font-weight:700;letter-spacing:0.04em;border:1px solid var(--border-subtle);">○ N/A</span>`;
+    return `<div class="eq-hp-row" data-hand="${esc(h.hand)}" ${selectable ? 'tabindex="0"' : ''} style="${dim}${cursor}display:grid;grid-template-columns:${gridCols};gap:0.5rem;align-items:center;padding:0.45rem 0.6rem;border-bottom:1px solid var(--border-subtle);font-size:0.8rem;" title="${esc(title)}">
+      <span>${statusBadge}</span>
+      <span style="color:var(--text-tertiary);font-family:'JetBrains Mono',monospace;">#${esc(h.hand)}</span>
+      <span>${cardsHtml}</span>
+      <span>${boardHtml}</span>
+      <span style="text-align:right;font-family:'JetBrains Mono',monospace;">${pot}</span>
+      <span style="text-align:right;font-family:'JetBrains Mono',monospace;color:${deltaCol};">${deltaStr}</span>
+      <span style="text-align:right;font-family:'JetBrains Mono',monospace;">${evStr}</span>
+    </div>`;
+  }).join('');
+
+  listEl.innerHTML = header + rowsHtml;
+
+  listEl.querySelectorAll('.eq-hp-row').forEach(row => {
+    const handNum = row.getAttribute('data-hand');
+    const hand = ordered.find(h => String(h.hand) === handNum);
+    if (!hand || !hand.allinSnapshot) return;
+    row.addEventListener('click', () => hpSelect(hand, row));
+  });
+}
+
+function hpSelect(hand, rowEl) {
+  _hpSelected = hand;
+  document.querySelectorAll('.eq-hp-row').forEach(r => { r.style.background = ''; });
+  rowEl.style.background = 'rgba(52,211,153,0.1)';
+  const snap = hand.allinSnapshot;
+  const btn = document.getElementById('eqHpCalcBtn');
+  const hint = document.getElementById('eqHpCalcHint');
+  btn.disabled = false;
+  const nPl = snap.players.length;
+  const boardStr = (snap.board && snap.board.length) ? ` · board ${snap.board.join(' ')}` : '';
+  hint.textContent = `Street: ${snap.street} · ${nPl} player${nPl === 1 ? '' : 's'} w/ known cards${boardStr}`;
+  document.getElementById('eqHpResults').style.display = 'none';
+}
+
+async function hpCalculate() {
+  if (!_hpSelected || !_hpSelected.allinSnapshot) return;
+  const snap = _hpSelected.allinSnapshot;
+  const btn = document.getElementById('eqHpCalcBtn');
+  const spinner = document.getElementById('eqHpSpinner');
+  const resultsEl = document.getElementById('eqHpResults');
+  btn.disabled = true;
+  spinner.style.display = 'inline';
+  try {
+    const payload = {
+      hands: snap.players.map(p => p.cards),
+      board: snap.board || [],
+      board2: snap.board2 || [],
+      committed: snap.players.map(p => +p.committed || 0),
+      dead_money: +snap.deadMoney || 0,
+      trials: 2500,
+    };
+    const res = await fetch('/api/equity', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Server returned ${res.status}`);
+    }
+    const data = await res.json();
+    hpRenderResults(snap, data);
+  } catch (e) {
+    resultsEl.style.display = 'block';
+    document.getElementById('eqHpResultsInfo').innerHTML = '';
+    document.getElementById('eqHpResultBar').innerHTML = '';
+    document.getElementById('eqHpTable').innerHTML = '';
+    document.getElementById('eqHpResultLabels').innerHTML = `<span class="error">${esc(e.message)}</span>`;
+  }
+  spinner.style.display = 'none';
+  btn.disabled = false;
+}
+
+function _hpCard(card) {
+  if (!card) return '<span class="hp-card placeholder">·</span>';
+  const rank = card[0] === 'T' ? '10' : card[0];
+  const suitChar = {s:'♠', h:'♥', d:'♦', c:'♣'}[card[1]] || card[1];
+  return `<span class="hp-card suit-${card[1]}">${rank}${suitChar}</span>`;
+}
+
+function _hpCards(arr) {
+  if (!arr || !arr.length) return '';
+  return arr.map(_hpCard).join('');
+}
+
+function hpRenderTable(snap, data) {
+  const equities = data.equities || [];
+  const isDouble = data.mode === 'double';
+  const filterPlayer = (document.getElementById('eqHpPlayer') || {}).value;
+
+  const seats = snap.players.map((p, i) => {
+    const eq = equities[i];
+    const equityStr = eq ? `${eq.equity.toFixed(1)}%` : '';
+    const isYou = p.name === filterPlayer;
+    return `<div class="hp-seat${isYou ? ' you' : ''}">
+      <div class="hp-seat-name" style="color:${EQ_PLAYER_COLORS[i % EQ_PLAYER_COLORS.length]};">${esc(p.name)}${isYou ? ' (you)' : ''}</div>
+      <div class="hp-seat-cards">${_hpCards(p.cards)}</div>
+      <div class="hp-seat-equity">${equityStr}</div>
+    </div>`;
+  }).join('');
+
+  const padBoard = (cards) => {
+    const filled = (cards || []).slice();
+    while (filled.length < 5) filled.push(null);
+    return filled.map(_hpCard).join('');
+  };
+
+  const board1Html = `<div class="hp-board-row">
+    <div class="hp-board-label">${isDouble ? 'BOARD 1' : 'BOARD'}</div>
+    <div class="hp-board-cards">${padBoard(snap.board)}</div>
+  </div>`;
+  const board2Html = isDouble ? `<div class="hp-board-row">
+    <div class="hp-board-label">BOARD 2</div>
+    <div class="hp-board-cards">${padBoard(snap.board2)}</div>
+  </div>` : '';
+
+  document.getElementById('eqHpTable').innerHTML = `<div class="hp-table">
+    <div class="hp-table-players">${seats}</div>
+    ${board1Html}
+    ${board2Html}
+  </div>`;
+}
+
+function hpRenderResults(snap, data) {
+  const resultsEl = document.getElementById('eqHpResults');
+  resultsEl.style.display = 'block';
+  const trials = data.trials || 2500;
+  const pot = +(snap.pot || 0);
+  const isDouble = data.mode === 'double';
+  const doubleStr = isDouble ? ' · Double board' : '';
+  document.getElementById('eqHpResultsInfo').innerHTML =
+    `Hand #${esc(_hpSelected.hand)} · ${esc(snap.street)} all-in · ${trials.toLocaleString()} trials · Pot <strong style="color:var(--text-primary);">$${pot.toFixed(2)}</strong>${doubleStr}`;
+
+  hpRenderTable(snap, data);
+
+  const equities = data.equities || [];
+  const labels = document.getElementById('eqHpResultLabels');
+  const bar = document.getElementById('eqHpResultBar');
+
+  if (isDouble) {
+    // Header row: only player name + overall % (board-level numbers shown in table below).
+    labels.innerHTML = equities.map((eq, i) => {
+      const color = EQ_PLAYER_COLORS[i % EQ_PLAYER_COLORS.length];
+      const name = snap.players[i] ? snap.players[i].name : `P${i + 1}`;
+      return `<span class="eq-result-label" style="color:${color}">${esc(name)}: ${eq.equity.toFixed(1)}%</span>`;
+    }).join('');
+    // Three stacked bars: B1, B2, Overall.
+    const buildBar = (key, label) => {
+      const segs = equities.map((eq, i) => {
+        const color = EQ_PLAYER_COLORS[i % EQ_PLAYER_COLORS.length];
+        const value = key === 'overall' ? eq.equity : (eq[key] && eq[key].equity) || 0;
+        return `<div style="width:${value}%;background:${color};"></div>`;
+      }).join('');
+      return `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem;">
+        <span style="color:var(--text-tertiary);font-size:0.7rem;font-weight:700;letter-spacing:0.06em;width:4.2rem;text-align:right;">${label}</span>
+        <div class="eq-result-bar" style="flex:1;margin:0;">${segs}</div>
+      </div>`;
+    };
+    bar.outerHTML = `<div id="eqHpResultBar">
+      ${buildBar('board1', 'BOARD 1')}
+      ${buildBar('board2', 'BOARD 2')}
+      ${buildBar('overall', 'OVERALL')}
+    </div>`;
+  } else {
+    labels.innerHTML = equities.map((eq, i) => {
+      const color = EQ_PLAYER_COLORS[i % EQ_PLAYER_COLORS.length];
+      const name = snap.players[i] ? snap.players[i].name : `P${i + 1}`;
+      return `<span class="eq-result-label" style="color:${color}">${esc(name)}: ${eq.equity.toFixed(1)}%</span>`;
+    }).join('');
+    bar.outerHTML = `<div class="eq-result-bar" id="eqHpResultBar">${equities.map((eq, i) => {
+      const color = EQ_PLAYER_COLORS[i % EQ_PLAYER_COLORS.length];
+      return `<div style="width:${eq.equity}%;background:${color};"></div>`;
+    }).join('')}</div>`;
+  }
+
+  // Per-player breakdown table.
+  let evHtml = '';
+  if (equities.length) {
+    if (isDouble) {
+      const rows = equities.map((eq, i) => {
+        const color = EQ_PLAYER_COLORS[i % EQ_PLAYER_COLORS.length];
+        const name = snap.players[i] ? snap.players[i].name : `P${i + 1}`;
+        const committed = (snap.players[i] && +snap.players[i].committed) || 0;
+        const grossPayout = (typeof eq.expected_payout === 'number') ? eq.expected_payout : (eq.equity / 100) * pot;
+        const expDollars = grossPayout - committed;
+        const cell = (b) => `${b.equity.toFixed(1)}% <span style="color:var(--text-muted);font-size:0.7rem;">(${b.wins}W/${b.ties}T/${b.losses}L)</span>`;
+        return `<tr>
+          <td style="padding:0.3rem 0.6rem;color:${color};font-weight:700;">${esc(name)}</td>
+          <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;">${cell(eq.board1)}</td>
+          <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;">${cell(eq.board2)}</td>
+          <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:var(--text-primary);font-weight:700;">${eq.equity.toFixed(1)}%</td>
+          <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:${expDollars >= 0 ? '#22c55e' : '#ef4444'};font-weight:700;">${expDollars >= 0 ? '+' : '-'}$${Math.abs(expDollars).toFixed(2)}</td>
+        </tr>`;
+      }).join('');
+      evHtml = `<table style="width:100%;margin-top:0.75rem;border-collapse:collapse;font-size:0.8rem;">
+        <thead><tr style="border-bottom:1px solid var(--border-default);color:var(--text-tertiary);font-size:0.7rem;letter-spacing:0.06em;">
+          <th style="padding:0.4rem 0.6rem;text-align:left;">PLAYER</th>
+          <th style="padding:0.4rem 0.6rem;text-align:right;">BOARD 1</th>
+          <th style="padding:0.4rem 0.6rem;text-align:right;">BOARD 2</th>
+          <th style="padding:0.4rem 0.6rem;text-align:right;">OVERALL</th>
+          <th style="padding:0.4rem 0.6rem;text-align:right;">EXPECTED $</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    } else if (pot > 0) {
+      const rows = equities.map((eq, i) => {
+        const color = EQ_PLAYER_COLORS[i % EQ_PLAYER_COLORS.length];
+        const name = snap.players[i] ? snap.players[i].name : `P${i + 1}`;
+        const wins = eq.wins || 0;
+        const ties = eq.ties || 0;
+        const losses = trials - wins - ties;
+        const committed = (snap.players[i] && +snap.players[i].committed) || 0;
+        const grossPayout = (typeof eq.expected_payout === 'number') ? eq.expected_payout : (eq.equity / 100) * pot;
+        const expDollars = grossPayout - committed;
+        return `<tr>
+          <td style="padding:0.3rem 0.6rem;color:${color};font-weight:700;">${esc(name)}</td>
+          <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:#22c55e;">${wins.toLocaleString()}</td>
+          <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:#f59e0b;">${ties.toLocaleString()}</td>
+          <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:#ef4444;">${losses.toLocaleString()}</td>
+          <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:${expDollars >= 0 ? '#22c55e' : '#ef4444'};font-weight:700;">${expDollars >= 0 ? '+' : '-'}$${Math.abs(expDollars).toFixed(2)}</td>
+        </tr>`;
+      }).join('');
+      evHtml = `<table style="width:100%;margin-top:0.75rem;border-collapse:collapse;font-size:0.8rem;">
+        <thead><tr style="border-bottom:1px solid var(--border-default);color:var(--text-tertiary);font-size:0.7rem;letter-spacing:0.06em;">
+          <th style="padding:0.4rem 0.6rem;text-align:left;">PLAYER</th>
+          <th style="padding:0.4rem 0.6rem;text-align:right;">WINS</th>
+          <th style="padding:0.4rem 0.6rem;text-align:right;">CHOPS</th>
+          <th style="padding:0.4rem 0.6rem;text-align:right;">LOSSES</th>
+          <th style="padding:0.4rem 0.6rem;text-align:right;">EXPECTED $</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    }
+  }
+  let evTable = document.getElementById('eqHpEvTable');
+  if (!evTable) {
+    evTable = document.createElement('div');
+    evTable.id = 'eqHpEvTable';
+    resultsEl.appendChild(evTable);
+  }
+  evTable.innerHTML = evHtml;
+}
+
+let _hpAllAbort = false;
+
+function hpStopAll() {
+  _hpAllAbort = true;
+}
+
+async function hpCalculateAll() {
+  const sel = document.getElementById('eqHpPlayer');
+  const player = sel.value;
+  if (!player) return;
+  const history = (typeof _statsData !== 'undefined' && _statsData && _statsData.handHistory) || {};
+  const all = history[player] || [];
+  const eligible = all.filter(h => {
+    if (!h.allinSnapshot) return false;
+    return (h.allinSnapshot.players || []).some(p => p.name === player);
+  });
+
+  const aggEl = document.getElementById('eqHpAggResults');
+  aggEl.style.display = 'block';
+
+  if (!eligible.length) {
+    aggEl.innerHTML = `<div style="color:var(--text-muted);font-size:0.85rem;">No all-in hands eligible for equity calculation for <strong>${esc(player)}</strong>.</div>`;
+    return;
+  }
+
+  const calcBtn = document.getElementById('eqHpCalcBtn');
+  const allBtn = document.getElementById('eqHpCalcAllBtn');
+  const stopBtn = document.getElementById('eqHpStopAllBtn');
+  calcBtn.disabled = true;
+  allBtn.disabled = true;
+  stopBtn.style.display = 'inline-block';
+  _hpAllAbort = false;
+
+  let sumExpected = 0;
+  let sumActual = 0;
+  let sumCommitted = 0;
+  let processed = 0;
+  const perHand = [];
+
+  const renderProgress = () => {
+    aggEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-tertiary);">
+      Running ${processed}/${eligible.length} hands for <strong style="color:var(--text-primary);">${esc(player)}</strong>… ${_hpAllAbort ? '<span style="color:#f59e0b;">stopping…</span>' : ''}
+    </div>`;
+  };
+  renderProgress();
+
+  const processHand = async (hand) => {
+    const snap = hand.allinSnapshot;
+    const playerIdx = snap.players.findIndex(p => p.name === player);
+    if (playerIdx < 0) return;
+    const committed = +snap.players[playerIdx].committed || 0;
+    const payload = {
+      hands: snap.players.map(p => p.cards),
+      board: snap.board || [],
+      board2: snap.board2 || [],
+      committed: snap.players.map(p => +p.committed || 0),
+      dead_money: +snap.deadMoney || 0,
+      trials: 2500,
+    };
+    try {
+      const res = await fetch('/api/equity', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      const data = await res.json();
+      const eq = (data.equities || [])[playerIdx];
+      if (eq && typeof eq.expected_payout === 'number') {
+        const expectedNet = eq.expected_payout - committed;
+        sumExpected += expectedNet;
+        sumActual += +hand.delta || 0;
+        sumCommitted += committed;
+        perHand.push({
+          hand: hand.hand,
+          committed,
+          expected: expectedNet,
+          actual: +hand.delta || 0,
+          equity: eq.equity,
+          street: snap.street,
+          double: data.mode === 'double',
+        });
+      }
+    } catch (e) {
+      // Skip this hand on error; continue with the rest.
+    }
+  };
+
+  // Bounded concurrent runner — fires up to CONCURRENCY requests in flight at once
+  // to keep the server-side process pool fed.
+  const CONCURRENCY = 4;
+  let next = 0;
+  const workers = Array.from({length: Math.min(CONCURRENCY, eligible.length)}, async () => {
+    while (!_hpAllAbort) {
+      const i = next++;
+      if (i >= eligible.length) return;
+      await processHand(eligible[i]);
+      processed++;
+      renderProgress();
+    }
+  });
+  await Promise.all(workers);
+
+  stopBtn.style.display = 'none';
+  calcBtn.disabled = false;
+  allBtn.disabled = false;
+
+  const diff = sumActual - sumExpected;
+  const fmt = (v) => `${v >= 0 ? '+' : '-'}$${Math.abs(v).toFixed(2)}`;
+  const col = (v) => v >= 0 ? '#22c55e' : '#ef4444';
+
+  const rows = perHand.map(h => `<tr>
+    <td style="padding:0.3rem 0.6rem;font-family:'JetBrains Mono',monospace;color:var(--text-tertiary);">#${esc(h.hand)}</td>
+    <td style="padding:0.3rem 0.6rem;font-family:'JetBrains Mono',monospace;color:var(--text-secondary);">${esc(h.street)}${h.double ? ' · 2B' : ''}</td>
+    <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:var(--text-secondary);">$${h.committed.toFixed(2)}</td>
+    <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:var(--text-secondary);">${h.equity.toFixed(1)}%</td>
+    <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:${col(h.expected)};">${fmt(h.expected)}</td>
+    <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:${col(h.actual)};">${fmt(h.actual)}</td>
+    <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:${col(h.actual - h.expected)};font-weight:700;">${fmt(h.actual - h.expected)}</td>
+  </tr>`).join('');
+
+  const stoppedNote = _hpAllAbort
+    ? `<div style="color:#f59e0b;font-size:0.8rem;margin-bottom:0.5rem;">Stopped after ${perHand.length}/${eligible.length} hands.</div>`
+    : '';
+
+  aggEl.innerHTML = `
+    ${stoppedNote}
+    <div style="display:flex;flex-wrap:wrap;gap:1.5rem;margin-bottom:0.75rem;font-size:0.85rem;">
+      <div><span style="color:var(--text-tertiary);font-size:0.7rem;letter-spacing:0.06em;font-weight:700;">PLAYER</span><br><strong style="color:var(--text-primary);">${esc(player)}</strong></div>
+      <div><span style="color:var(--text-tertiary);font-size:0.7rem;letter-spacing:0.06em;font-weight:700;">HANDS</span><br><strong style="color:var(--text-primary);">${perHand.length}</strong></div>
+      <div><span style="color:var(--text-tertiary);font-size:0.7rem;letter-spacing:0.06em;font-weight:700;">TOTAL COMMITTED</span><br><strong style="color:var(--text-primary);">$${sumCommitted.toFixed(2)}</strong></div>
+      <div><span style="color:var(--text-tertiary);font-size:0.7rem;letter-spacing:0.06em;font-weight:700;">EXPECTED EV</span><br><strong style="color:${col(sumExpected)};">${fmt(sumExpected)}</strong></div>
+      <div><span style="color:var(--text-tertiary);font-size:0.7rem;letter-spacing:0.06em;font-weight:700;">ACTUAL NET</span><br><strong style="color:${col(sumActual)};">${fmt(sumActual)}</strong></div>
+      <div><span style="color:var(--text-tertiary);font-size:0.7rem;letter-spacing:0.06em;font-weight:700;">EV DIFFERENTIAL</span><br><strong style="color:${col(diff)};">${fmt(diff)}</strong></div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
+      <thead><tr style="border-bottom:1px solid var(--border-default);color:var(--text-tertiary);font-size:0.7rem;letter-spacing:0.06em;">
+        <th style="padding:0.4rem 0.6rem;text-align:left;">HAND</th>
+        <th style="padding:0.4rem 0.6rem;text-align:left;">STREET</th>
+        <th style="padding:0.4rem 0.6rem;text-align:right;">COMMITTED</th>
+        <th style="padding:0.4rem 0.6rem;text-align:right;">EQUITY</th>
+        <th style="padding:0.4rem 0.6rem;text-align:right;">EXPECTED</th>
+        <th style="padding:0.4rem 0.6rem;text-align:right;">ACTUAL</th>
+        <th style="padding:0.4rem 0.6rem;text-align:right;">DIFF</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
 // Load saved results on init
 eqRenderSaved();
+hpRefresh();
 
 // Preset scenarios — each has multiple boards to pick from randomly
 const EQ_PRESETS = {
