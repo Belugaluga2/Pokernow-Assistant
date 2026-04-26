@@ -351,6 +351,15 @@
   .copy-btn:hover { border-color: var(--border-strong); color: var(--text-primary); background: rgba(255, 255, 255, 0.05); }
   .copy-btn.copied { border-color: var(--accent); color: var(--accent); background: var(--accent-deep); }
   .copy-btn svg { flex-shrink: 0; }
+  .multiply-toggle {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.35rem 0.8rem; background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+    color: var(--text-secondary); font-size: 0.78rem; font-weight: 600; font-family: 'JetBrains Mono', monospace;
+    cursor: pointer; transition: all var(--transition-base); letter-spacing: 0.01em;
+  }
+  .multiply-toggle:hover { border-color: var(--border-strong); color: var(--text-primary); background: rgba(255, 255, 255, 0.05); }
+  .multiply-toggle.active { border-color: var(--yellow); color: var(--yellow); background: rgba(251, 191, 36, 0.08); }
 
   /* Legacy force-controls kept for compat */
   .force-controls { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-subtle); }
@@ -813,6 +822,9 @@
   [data-theme="light"] .upload-zone.dragover { background: rgba(5, 150, 105, 0.03); }
   [data-theme="light"] .copy-btn { background: rgba(0, 0, 0, 0.02); }
   [data-theme="light"] .copy-btn:hover { background: rgba(0, 0, 0, 0.04); }
+  [data-theme="light"] .multiply-toggle { background: rgba(0, 0, 0, 0.02); }
+  [data-theme="light"] .multiply-toggle:hover { background: rgba(0, 0, 0, 0.04); }
+  [data-theme="light"] .multiply-toggle.active { background: rgba(251, 191, 36, 0.08); }
 
   [data-theme="light"] .card { backdrop-filter: blur(8px); }
   [data-theme="light"] .card:hover { border-color: var(--border-default); }
@@ -959,10 +971,15 @@
       <div class="card">
         <div class="settlements-header">
           <h2>Settlements</h2>
-          <button class="copy-btn" id="copyPaymentsBtn" style="display:none" onclick="_copySettlements()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-            <span>Copy</span>
-          </button>
+          <div style="display:flex;gap:0.5rem;align-items:center;">
+            <button class="multiply-toggle" id="multiplyToggleBtn" style="display:none" onclick="_toggleSettlementMultiplier()">
+              <span>&times;100</span>
+            </button>
+            <button class="copy-btn" id="copyPaymentsBtn" style="display:none" onclick="_copySettlements()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+              <span>Copy</span>
+            </button>
+          </div>
         </div>
         <div id="settlements"><p style="color:var(--text-tertiary)">No data yet</p></div>
       </div>
@@ -1702,6 +1719,7 @@ function bpSort(col) {
 // ===== LEDGER =====
 let _ledgerData = null;
 let _forcedPairs = [];
+let _settlementMultiplied = false;
 let _playerMerges = [];
 
 function _getEffectivePlayers() {
@@ -1766,8 +1784,12 @@ function _renderSettlements() {
   const players = _getEffectivePlayers();
   const settlements = _computeSettlements(players, _forcedPairs);
 
-  // Show/hide copy button in header
-  document.getElementById('copyPaymentsBtn').style.display = settlements.length > 0 ? '' : 'none';
+  // Show/hide header buttons
+  const hasSettlements = settlements.length > 0;
+  document.getElementById('copyPaymentsBtn').style.display = hasSettlements ? '' : 'none';
+  document.getElementById('multiplyToggleBtn').style.display = hasSettlements ? '' : 'none';
+
+  const mult = _settlementMultiplied ? 100 : 1;
 
   // Build debtor/creditor lists for dropdowns
   const debtors = players.filter(p => p.net < -0.005);
@@ -1779,7 +1801,7 @@ function _renderSettlements() {
       <div class="settlement${s.forced ? ' forced' : ''}">
         <span class="from">${esc(s.from)}</span>
         <span class="arrow">&#x2192;</span>
-        <span class="amount">$${s.amount.toFixed(2)}</span>
+        <span class="amount">$${(s.amount * mult).toFixed(2)}</span>
         <span class="arrow">&#x2192;</span>
         <span class="to">${esc(s.to)}</span>
         ${s.forced ? '<span class="forced-tag">forced</span>' : ''}
@@ -1812,10 +1834,19 @@ function _renderSettlements() {
   document.getElementById('settlements').innerHTML = html;
 }
 
+function _toggleSettlementMultiplier() {
+  _settlementMultiplied = !_settlementMultiplied;
+  const btn = document.getElementById('multiplyToggleBtn');
+  btn.classList.toggle('active', _settlementMultiplied);
+  btn.querySelector('span').textContent = _settlementMultiplied ? '÷100' : '×100';
+  _renderSettlements();
+}
+
 function _copySettlements() {
   const players = _getEffectivePlayers();
   const settlements = _computeSettlements(players, _forcedPairs);
-  const text = settlements.map(s => `${s.from} pays ${s.to} $${s.amount.toFixed(2)}`).join('\n');
+  const mult = _settlementMultiplied ? 100 : 1;
+  const text = settlements.map(s => `${s.from} pays ${s.to} $${(s.amount * mult).toFixed(2)}`).join('\n');
   navigator.clipboard.writeText(text).then(() => {
     const btn = document.getElementById('copyPaymentsBtn');
     if (!btn) return;
