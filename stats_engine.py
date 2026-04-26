@@ -41,6 +41,7 @@ ALLIN_APPROVAL = 14
 END_OF_HAND = 15
 REFUND = 16
 BOUNTIES = 18
+SEVEN_DEUCE_BOUNTY = 21
 
 # ── Position derivation ──────────────────────────────────────────────────
 
@@ -785,7 +786,7 @@ def _compute_deltas(hand):
         elif t == PAYOUT and name and val:
             deltas[name] += val
 
-        # Bounties
+        # Bounties (CSV format — uses seat numbers)
         elif t == BOUNTIES:
             for s, v in pl.get('paidBounties', []) or []:
                 n = seat_to_name.get(s)
@@ -795,6 +796,15 @@ def _compute_deltas(hand):
                 n = seat_to_name.get(s)
                 if n:
                     deltas[n] += float(v or 0)
+
+        # 7-2 Bounty (JSON format — uses player names directly)
+        elif t == SEVEN_DEUCE_BOUNTY:
+            prize = float(pl.get('prizePerPlayer', 0))
+            recipients = pl.get('recipientPlayers') or {}
+            for loser_id, loser_name in pl.get('losingPlayer', []):
+                deltas[loser_name] -= prize * len(recipients)
+            for rid, rname in recipients.items():
+                deltas[rname] += prize
 
         # Street advance — reset per-street contributions
         elif t == COMMUNITY:

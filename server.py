@@ -206,11 +206,13 @@ def fetch_game_state(game_id, timeout=4):
 
 
 def extract_stacks_from_state(state):
-    """Extract player stacks from the Socket.IO game state. Stacks are in cents."""
+    """Extract player stacks from the Socket.IO game state. Stacks are in cents.
+    Includes nit game escrow so the ledger sums to zero."""
     stacks = {}
     players = state.get('players', {})
+    nit_escrow = state.get('nit', {}).get('escrowPerPlayer', {})
     for pid, info in players.items():
-        stack_cents = info.get('stack', 0)
+        stack_cents = info.get('stack', 0) + nit_escrow.get(pid, 0)
         stacks[pid] = round(stack_cents / 100, 2)
     return stacks
 
@@ -286,24 +288,29 @@ def compute_ledger(logs, active_stacks):
     uncertain_idx = []
     for pid, p in players.items():
         total_buyin = round(sum(p['buyins']), 2)
-        if p['isActive']:
+        is_active = p['isActive']
+        uncertain = False
+        if is_active:
             if pid in active_stacks:
                 stack = active_stacks[pid]
             else:
                 stack = p['lastStack']
-                uncertain_idx.append(len(results))
+                uncertain = True
         else:
             stack = 0
         total_cashout = round(sum(p['cashouts']) + stack, 2)
         net = round(total_cashout - total_buyin, 2)
         if total_buyin == 0 and total_cashout == 0:
             continue
+        if uncertain:
+            uncertain_idx.append(len(results))
         results.append({
             'name': p['name'], 'id': pid,
             'buyin': total_buyin, 'cashout': total_cashout, 'net': net,
         })
 
-    # Zero-sum correction for any remaining inaccuracy
+    # Zero-sum correction: if exactly one active player's stack is uncertain,
+    # derive it from the constraint that all nets must sum to 0
     total_net = round(sum(p['net'] for p in results), 2)
     if abs(total_net) > 0.01 and len(uncertain_idx) == 1:
         idx = uncertain_idx[0]
