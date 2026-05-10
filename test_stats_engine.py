@@ -13,6 +13,7 @@ from stats_engine import (
     compute_all_stats,
     compute_winnings,
     _compute_deltas,
+    extract_hand,
     CHECK, ANTE, BIG_BLIND, SMALL_BLIND, POSTED_BB, POSTED_SB_DEAD,
     CALL, BET_RAISE, COMMUNITY, PAYOUT, FOLD, SHOW_MUCK,
     ALLIN_APPROVAL, END_OF_HAND, REFUND,
@@ -2966,3 +2967,45 @@ class TestSidePotEV:
         # AA has set on turn, should win nearly always
         assert a['equity'] > 95
         assert row['street'] == 'turn'
+
+
+# ── extract_hand (replayer endpoint) ───────────────────────────────────
+
+class TestExtractHand:
+    def test_returns_hand_by_number(self):
+        h1 = make_hand(
+            [make_player("A", "a1", 1, hand=["As", "Kd"]),
+             make_player("B", "b1", 2, hand=["Qh", "Qc"])],
+            [ev(SMALL_BLIND, seat=1, value=1),
+             ev(BIG_BLIND, seat=2, value=2),
+             ev(CALL, seat=1, value=2),
+             ev(BET_RAISE, seat=2, value=5),
+             ev(FOLD, seat=1),
+             ev(PAYOUT, seat=2, value=4)],
+            number="42",
+        )
+        h2 = make_hand(
+            [make_player("A", "a1", 1), make_player("B", "b1", 2)],
+            [ev(FOLD, seat=1)],
+            number="43",
+        )
+
+        out = extract_hand([h1, h2], "42")
+        assert out is not None
+        assert out['number'] == "42"
+        assert len(out['events']) == 6
+        # Each event has kind + text
+        for e in out['events']:
+            assert 'kind' in e
+            assert 'text' in e
+            assert isinstance(e['text'], str) and e['text']
+        kinds = [e['kind'] for e in out['events']]
+        assert kinds == ['sb', 'bb', 'call', 'bet_raise', 'fold', 'payout']
+
+    def test_returns_none_when_missing(self):
+        h = make_hand([make_player("A", "a1", 1)], [ev(FOLD, seat=1)], number="1")
+        assert extract_hand([h], "999") is None
+
+    def test_int_number_lookup(self):
+        h = make_hand([make_player("A", "a1", 1)], [ev(FOLD, seat=1)], number="7")
+        assert extract_hand([h], 7) is not None

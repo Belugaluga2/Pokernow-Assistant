@@ -509,6 +509,55 @@
   .hh-db-threequarter { color: var(--purple); background: var(--purple-dim); }
   .hh-db-chop { color: var(--blue); background: var(--blue-dim); }
   .hh-db-quarter { color: var(--red); background: var(--red-dim); }
+  .hh-replay-btn {
+    background: none; border: 1px solid var(--border-default); color: var(--text-secondary);
+    width: 22px; height: 22px; border-radius: 50%; cursor: pointer; padding: 0;
+    font-size: 0.7rem; line-height: 1; transition: all var(--transition-fast);
+  }
+  .hh-replay-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+
+  /* Hand replayer */
+  .replay-table {
+    background: radial-gradient(ellipse at center, #0f3a26 0%, #0a2818 70%);
+    border: 1px solid rgba(34, 197, 94, 0.18);
+    border-radius: 12px; padding: 1rem; margin-bottom: 0.75rem;
+  }
+  .replay-players { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; margin-bottom: 0.75rem; }
+  .replay-seat {
+    background: rgba(0,0,0,0.32); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px; padding: 0.4rem 0.6rem; min-width: 7rem; text-align: center;
+    transition: opacity 0.2s;
+  }
+  .replay-seat.folded { opacity: 0.32; }
+  .replay-name { font-size: 0.75rem; font-weight: 700; color: rgba(255,255,255,0.85); margin-bottom: 0.25rem; }
+  .replay-cards { display: flex; gap: 0.2rem; justify-content: center; min-height: 1.2rem; }
+  .replay-stack { font-size: 0.7rem; color: rgba(255,255,255,0.5); margin-top: 0.25rem; font-family: 'JetBrains Mono', monospace; }
+  .replay-board-row { display: flex; align-items: center; gap: 0.6rem; justify-content: center; margin: 0.4rem 0; }
+  .replay-board-label { color: rgba(255,255,255,0.5); font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em; width: 4.5rem; text-align: right; }
+  .replay-board-cards { display: flex; gap: 0.25rem; }
+  .replay-card-placeholder {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 1.6rem; height: 2rem;
+    border: 1px dashed rgba(255,255,255,0.18); border-radius: 4px;
+    color: rgba(255,255,255,0.3);
+  }
+  .replay-controls { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0; flex-wrap: wrap; }
+  .replay-log {
+    max-height: 300px; overflow-y: auto;
+    border: 1px solid var(--border-subtle); border-radius: 6px;
+    background: var(--bg-input); padding: 0.4rem;
+  }
+  .replay-event { display: flex; gap: 0.6rem; padding: 0.3rem 0.5rem; font-size: 0.8rem; border-radius: 3px; }
+  .replay-event-num { color: var(--text-muted); font-family: 'JetBrains Mono', monospace; min-width: 2.2rem; }
+  .replay-event-text { color: var(--text-secondary); }
+  .replay-event-past { opacity: 0.55; }
+  .replay-event-current { background: var(--accent-glow); border-left: 2px solid var(--accent); }
+  .replay-event-current .replay-event-text { color: var(--text-primary); font-weight: 600; }
+  .replay-event-future { opacity: 0.35; }
+  .replay-kind-community .replay-event-text { color: var(--blue); }
+  .replay-kind-fold .replay-event-text { color: var(--red); }
+  .replay-kind-payout .replay-event-text { color: var(--accent); }
+  .replay-kind-allin_approval .replay-event-text { color: #f59e0b; font-weight: 700; }
   .hh-filter-btn {
     background: none; border: 1px solid var(--border-default); color: var(--text-secondary);
     padding: 2px 10px; border-radius: 4px; font-size: 0.75rem; cursor: pointer; font-family: inherit;
@@ -630,74 +679,6 @@
   .eq-result-label { font-size: 0.85rem; font-weight: 700; }
   .eq-hands-display { margin-top: 0.75rem; font-size: 0.85rem; color: var(--text-secondary); }
 
-  /* Poker-table visualization for the Hand Picker */
-  .hp-table {
-    background: radial-gradient(ellipse at center, #0f3a26 0%, #0a2818 70%);
-    border: 1px solid rgba(34, 197, 94, 0.18);
-    border-radius: 16px;
-    padding: 1.25rem 1rem;
-    margin: 0.5rem 0 1rem;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 4px 16px rgba(0,0,0,0.25);
-  }
-  .hp-table-players {
-    display: flex; flex-wrap: wrap; justify-content: center; gap: 0.75rem;
-    margin-bottom: 1rem;
-  }
-  .hp-seat {
-    background: rgba(0,0,0,0.32);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
-    padding: 0.5rem 0.75rem;
-    min-width: 9rem;
-    text-align: center;
-  }
-  .hp-seat.you {
-    border-color: rgba(52, 211, 153, 0.55);
-    box-shadow: 0 0 0 1px rgba(52,211,153,0.18);
-    background: rgba(8,30,20,0.6);
-  }
-  .hp-seat-name { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; margin-bottom: 0.35rem; }
-  .hp-seat-cards { display: flex; gap: 0.25rem; justify-content: center; flex-wrap: wrap; }
-  .hp-seat-equity { font-size: 0.7rem; color: rgba(255,255,255,0.55); margin-top: 0.3rem; letter-spacing: 0.04em; }
-
-  .hp-board-row {
-    display: flex; align-items: center; gap: 0.6rem; justify-content: center;
-    margin: 0.4rem 0;
-  }
-  .hp-board-label {
-    color: rgba(255,255,255,0.5);
-    font-size: 0.65rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    width: 3.5rem;
-    text-align: right;
-  }
-  .hp-board-cards { display: flex; gap: 0.3rem; }
-
-  .hp-card {
-    display: inline-flex; align-items: center; justify-content: center;
-    min-width: 2.2rem; height: 2.7rem; padding: 0 0.35rem;
-    background: #fafafa;
-    border: 1px solid rgba(0,0,0,0.15);
-    border-radius: 5px;
-    font-family: 'JetBrains Mono', monospace;
-    font-weight: 700;
-    font-size: 1rem;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.4);
-    color: #111;
-  }
-  .hp-card.suit-h, .hp-card.suit-d { color: #c0212e; }
-  .hp-card.suit-s, .hp-card.suit-c { color: #111; }
-  .hp-card.placeholder {
-    background: rgba(255,255,255,0.06);
-    border: 1px dashed rgba(255,255,255,0.18);
-    color: rgba(255,255,255,0.3);
-    box-shadow: none;
-  }
-  [data-theme="light"] .hp-table {
-    background: radial-gradient(ellipse at center, #166c4a 0%, #0e4a32 70%);
-    border-color: rgba(34, 197, 94, 0.3);
-  }
   .eq-action-btn {
     padding: 0.5rem 1.25rem; border-radius: 20px; font-weight: 500;
     border: 1px solid var(--border-default); cursor: pointer; font-size: 0.82rem; font-family: inherit;
@@ -1002,7 +983,10 @@
 
       <div id="statsArea" style="display:none">
         <div class="card">
-          <div class="game-info" id="statsInfo"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">
+            <div class="game-info" id="statsInfo" style="flex:1"></div>
+            <button class="btn btn-sm btn-outline" onclick="openMergeModal()">Merge players</button>
+          </div>
         </div>
 
         <!-- Stats sub-tabs -->
@@ -1115,33 +1099,13 @@
         </div>
       </div>
 
-      <!-- Hand Picker from Uploaded CSV -->
-      <div class="card" id="eqHandPickerCard">
-        <h2>Pick Hand from Uploaded Game</h2>
-        <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:0.75rem;">Upload a CSV on the Stats tab, then browse real hands from that game. Select a hand where a player went all-in pre-river and calculate equity with 2500 MC trials.</p>
-        <div id="eqHpEmpty" style="color:var(--text-tertiary);font-size:0.85rem;">No CSV uploaded yet. Upload one on the Stats tab to browse hands.</div>
-        <div id="eqHpControls" style="display:none;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:0.75rem;">
-          <label style="color:var(--text-tertiary);font-size:0.8rem;display:flex;align-items:center;gap:0.4rem;">
-            Player
-            <select id="eqHpPlayer" style="padding:0.35rem 0.5rem;background:var(--bg-input);border:1px solid var(--border-default);color:var(--text-primary);border-radius:4px;font-size:0.8rem;"></select>
-          </label>
-          <span id="eqHpCount" style="color:var(--text-muted);font-size:0.75rem;"></span>
+      <!-- All-in EV Analysis -->
+      <div class="card" id="evCard" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem">
+          <h2 style="margin:0">All-in EV Analysis</h2>
+          <button class="btn btn-sm btn-outline" onclick="openMergeModal()">Merge players</button>
         </div>
-        <div id="eqHpList" style="display:none;max-height:340px;overflow-y:auto;border:1px solid var(--border-subtle);border-radius:6px;"></div>
-        <div id="eqHpActionRow" style="display:none;align-items:center;gap:1rem;margin-top:0.75rem;flex-wrap:wrap;">
-          <button class="eq-calc-btn" id="eqHpCalcBtn" disabled onclick="hpCalculate()">Calculate Equity (2500 trials)</button>
-          <button class="eq-calc-btn" id="eqHpCalcAllBtn" onclick="hpCalculateAll()">Net Equity Across All Ins</button>
-          <button class="eq-calc-btn" id="eqHpStopAllBtn" onclick="hpStopAll()" style="display:none;background:linear-gradient(135deg,#ef4444,#dc2626);border-color:#b91c1c;">Stop</button>
-          <span id="eqHpCalcHint" style="color:var(--text-muted);font-size:0.75rem;"></span>
-          <span id="eqHpSpinner" style="display:none;"><span class="eq-spinner"></span></span>
-        </div>
-        <div id="eqHpResults" style="display:none;margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border-subtle);">
-          <div id="eqHpResultsInfo" style="color:var(--text-tertiary);font-size:0.8rem;margin-bottom:0.5rem;"></div>
-          <div id="eqHpTable"></div>
-          <div class="eq-result-labels" id="eqHpResultLabels"></div>
-          <div class="eq-result-bar" id="eqHpResultBar"></div>
-        </div>
-        <div id="eqHpAggResults" style="display:none;margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border-subtle);"></div>
+        <div id="evContent" style="margin-top:1rem"></div>
       </div>
 
       <!-- Saved Results -->
@@ -1182,7 +1146,7 @@ function switchTab(name, btn) {
   if (btn) btn.classList.add('active');
   else document.querySelector(`[onclick*="'${name}'"]`).classList.add('active');
   document.getElementById('tab-' + name).classList.add('active');
-  if (name === 'equity' && typeof hpRefresh === 'function') hpRefresh();
+  try { localStorage.setItem('pn-active-tab', name); } catch (e) {}
 }
 
 let _progressTimer = null;
@@ -1257,11 +1221,18 @@ function uploadFile(input) {
 }
 
 async function processFile(file) {
+  const text = await file.text();
+  return _processUploadText(text, file.name, {fromCache: false});
+}
+
+async function _processUploadText(text, filename, opts) {
+  opts = opts || {};
   const uploadZone = document.getElementById('uploadZone');
-  uploadZone.innerHTML = '<div style="color:#94a3b8"><span class="spinner" style="width:20px;height:20px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:0.5rem;"></span> Processing ' + esc(file.name) + '...</div>';
+  if (uploadZone) {
+    uploadZone.innerHTML = '<div style="color:#94a3b8"><span class="spinner" style="width:20px;height:20px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:0.5rem;"></span> Processing ' + esc(filename || 'upload') + '...</div>';
+  }
 
   try {
-    const text = await file.text();
     const res = await fetch('/api/stats/upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/octet-stream' },
@@ -1272,11 +1243,65 @@ async function processFile(file) {
       throw new Error(err.error || `Server returned ${res.status}`);
     }
     const data = await res.json();
+    // Only commit the file to state after a successful parse — keeps stale text from polluting EV/replay
+    _lastUploadedFile = text;
     renderFullStats(data);
-    uploadZone.innerHTML = '<p style="color:#22c55e">Loaded ' + (data.totalHands + (data.totalBombPots || 0)) + ' hands from ' + esc(file.name) + '</p><p class="hint">Drop another file to re-analyze</p>';
+    if (!opts.fromCache) _saveCurrentUpload(text, filename);
+    if (uploadZone) {
+      const tag = opts.fromCache ? '<span style="font-size:0.7rem;color:var(--text-muted);background:rgba(255,255,255,0.05);border:1px solid var(--border-subtle);padding:1px 6px;border-radius:8px;margin-left:0.5rem;">restored</span>' : '';
+      uploadZone.innerHTML = '<p style="color:var(--accent)">Loaded ' + (data.totalHands + (data.totalBombPots || 0)) + ' hands from ' + esc(filename || 'upload') + tag + '</p><p class="hint">Drop another file to re-analyze · <a href="#" onclick="clearUploadCache(); return false" style="color:var(--text-muted);text-decoration:underline dashed;">Forget this game</a></p>';
+    }
+    return true;
   } catch (err) {
-    uploadZone.innerHTML = '<p class="error">Error: ' + esc(err.message) + '</p><p class="hint">Try again</p>';
+    if (uploadZone) {
+      uploadZone.innerHTML = '<p class="error">Error: ' + esc(err.message) + '</p><p class="hint">Try again</p>';
+    }
+    return false;
   }
+}
+
+const UPLOAD_CACHE_KEY = 'pn-current-upload';
+
+function _saveCurrentUpload(text, filename) {
+  try {
+    localStorage.setItem(UPLOAD_CACHE_KEY, JSON.stringify({content: text, filename: filename || '', savedAt: Date.now()}));
+  } catch (e) {
+    console.warn('Could not cache upload (likely localStorage quota):', e);
+  }
+}
+
+function _loadCurrentUpload() {
+  try {
+    const raw = localStorage.getItem(UPLOAD_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function clearUploadCache() {
+  // Compute session key BEFORE clearing _lastUploadedFile (otherwise the key resolves differently)
+  const key = _sessionKey();
+  try { localStorage.removeItem(UPLOAD_CACHE_KEY); } catch (e) {}
+  if (key) {
+    _evCacheClear(key); // removes the data slot AND updates the LRU index
+    try { localStorage.removeItem('pn-merges:' + key); } catch (e) {}
+  }
+  _lastUploadedFile = null;
+  _statsData = null;
+  _evData = null;
+  _playerMerges = [];
+  if (_winChart) { try { _winChart.destroy(); } catch (e) {} _winChart = null; }
+  const statsArea = document.getElementById('statsArea');
+  if (statsArea) statsArea.style.display = 'none';
+  const evCard = document.getElementById('evCard');
+  if (evCard) evCard.style.display = 'none';
+  const uploadZone = document.getElementById('uploadZone');
+  if (uploadZone) uploadZone.innerHTML = '<p>Drag &amp; drop a CSV or JSON file, or enter a game URL above and click Analyze</p><p class="hint">Stats are fetched automatically from game URLs</p>';
+}
+
+async function _restoreUploadFromCacheOnLoad() {
+  const cached = _loadCurrentUpload();
+  if (!cached || !cached.content) return;
+  await _processUploadText(cached.content, cached.filename || 'cached upload', {fromCache: true});
 }
 
 // ===== STATS RENDERING =====
@@ -1336,17 +1361,35 @@ const STAT_TABS = {
 function renderFullStats(data) {
   _statsData = data;
   _sortCol = null;
-  if (typeof hpRefresh === 'function') hpRefresh();
+
+  // Load any persisted merges for this session and apply
+  _mergesLoad();
+  _statsData.merged = _applyMergesToStats(_statsData);
+
+  // Try to restore cached EV results for this session
+  const cached = _evCacheLoad(_sessionKey());
+  if (cached && cached.evData) {
+    _lastEvTrials = cached.trials || _lastEvTrials;
+    _evFromCache = true;
+    _evData = {...cached.evData, available: true, computed: true};
+    _evData.merged = _applyMergesToEv(_evData);
+    renderEV(_evData);
+  } else {
+    _evFromCache = false;
+    renderEV(data.ev);
+  }
 
   // Show stats area
   document.getElementById('statsArea').style.display = 'block';
+
+  const stSrc = _statsData.merged || _statsData;
 
   // Info bar
   document.getElementById('statsInfo').innerHTML = `
     <div class="stat"><span class="stat-label">Format</span><span class="stat-value">${data.format || '?'}</span></div>
     <div class="stat"><span class="stat-label">Hands</span><span class="stat-value">${data.totalHands}</span></div>
     <div class="stat"><span class="stat-label">Bomb Pots</span><span class="stat-value">${data.totalBombPots}</span></div>
-    <div class="stat"><span class="stat-label">Players</span><span class="stat-value">${data.stats.length}</span></div>
+    <div class="stat"><span class="stat-label">Players</span><span class="stat-value">${stSrc.stats.length}</span></div>
   `;
 
   // Render initial tab — default to bomb pot if no standard hands
@@ -1354,11 +1397,11 @@ function renderFullStats(data) {
   const defaultBtn = [...document.querySelectorAll('.sub-tab')].find(b => b.getAttribute('onclick').includes(defaultTab));
   switchStatTab(defaultTab, defaultBtn);
 
-  // Winnings chart
-  renderWinningsChart(data.winnings);
+  // Winnings chart (merged)
+  renderWinningsChart(stSrc.winnings);
 
-  // Biggest pots
-  renderBiggestPots(data.biggestPots);
+  // Biggest pots (merged)
+  renderBiggestPots(stSrc.biggestPots);
 }
 
 function switchStatTab(name, btn) {
@@ -1372,7 +1415,8 @@ function switchStatTab(name, btn) {
 function renderStatsTable() {
   if (!_statsData) return;
   const tab = STAT_TABS[_currentStatTab];
-  const stats = [..._statsData.stats];
+  const src = _statsData.merged || _statsData;
+  const stats = [...src.stats];
 
   // Sort
   if (_sortCol) {
@@ -1516,6 +1560,355 @@ function renderWinningsChart(winnings) {
   });
 }
 
+// ===== EV ANALYSIS =====
+let _lastUploadedFile = null;
+let _lastEvTrials = 5000;
+let _evData = null;
+let _evSortCol = 'diff';
+let _evSortDir = 'desc';
+let _evFromCache = false;
+
+// Stable per-source key. CSV uploads → FNV-1a hash of the file; live mode → game ID.
+function _fnv1a(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
+}
+function _sessionKey() {
+  // Prefer CSV content hash — deterministic from the actual data, survives URL field state
+  if (_lastUploadedFile) return 'csv-' + _fnv1a(_lastUploadedFile);
+  const gameInput = document.getElementById('gameUrl');
+  const url = gameInput && gameInput.value && gameInput.value.trim();
+  if (url) {
+    const m = url.match(/\/games\/([\w-]+)/);
+    return 'live-' + (m ? m[1] : url);
+  }
+  return null;
+}
+
+const EV_CACHE_INDEX = 'pn-ev-keys';
+const EV_CACHE_MAX = 5;
+
+function _evCacheLoad(key) {
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem('pn-ev:' + key);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+function _evCacheSave(key, payload) {
+  if (!key) return;
+  try {
+    localStorage.setItem('pn-ev:' + key, JSON.stringify(payload));
+    let idx = [];
+    try { idx = JSON.parse(localStorage.getItem(EV_CACHE_INDEX) || '[]'); } catch (e) {}
+    idx = idx.filter(k => k !== key);
+    idx.unshift(key);
+    while (idx.length > EV_CACHE_MAX) {
+      const evicted = idx.pop();
+      localStorage.removeItem('pn-ev:' + evicted);
+    }
+    localStorage.setItem(EV_CACHE_INDEX, JSON.stringify(idx));
+  } catch (e) {}
+}
+function _evCacheClear(key) {
+  if (!key) return;
+  try {
+    localStorage.removeItem('pn-ev:' + key);
+    let idx = [];
+    try { idx = JSON.parse(localStorage.getItem(EV_CACHE_INDEX) || '[]'); } catch (e) {}
+    idx = idx.filter(k => k !== key);
+    localStorage.setItem(EV_CACHE_INDEX, JSON.stringify(idx));
+  } catch (e) {}
+}
+
+function clearEvCache() {
+  _evCacheClear(_sessionKey());
+  _evData = null;
+  _evFromCache = false;
+  renderEV({available: true, computed: false});
+}
+
+function renderEV(ev) {
+  const card = document.getElementById('evCard');
+  if (!ev || !ev.available) {
+    card.style.display = 'none';
+    return;
+  }
+
+  card.style.display = 'block';
+
+  // Not yet computed — show button with trials input
+  if (!ev.computed && !ev.perPlayer) {
+    document.getElementById('evContent').innerHTML = `
+      <p style="color:var(--text-secondary); margin-bottom:1rem;">Monte Carlo equity simulation for all-in hands.</p>
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+        <label style="color:var(--text-tertiary);font-size:0.85rem;">Trials: <input type="number" id="evTrials" value="${_lastEvTrials}" min="500" max="500000" step="1000" style="width:80px;padding:0.3rem;background:var(--bg-input);border:1px solid var(--border-strong);border-radius:4px;color:var(--text-primary);font-size:0.85rem;"></label>
+        <button class="btn btn-sm" onclick="computeEV()">Compute All-in EV</button>
+        <span style="color:var(--text-muted);font-size:0.75rem;">Lower = faster, higher = more accurate</span>
+      </div>
+    `;
+    return;
+  }
+
+  _evData = ev;
+  // Ensure merged view is in sync with current merges (defensive — covers fresh compute paths)
+  if (!ev.merged) ev.merged = _applyMergesToEv(ev);
+  const evSrc = ev.merged || ev;
+  const pp = evSrc.perPlayer || {};
+  const rows = evSrc.evRows || [];
+
+  // Get winnings data for net totals (merged) — also rebuild defensively
+  if (_statsData && !_statsData.merged) _statsData.merged = _applyMergesToStats(_statsData);
+  const stSrc = (_statsData && (_statsData.merged || _statsData)) || {};
+  const wp = (stSrc.winnings && stSrc.winnings.players) || {};
+
+  // Build sortable rows
+  const evIcon = k => _evSortCol !== k ? '' : _evSortDir === 'asc' ? ' ▲' : ' ▼';
+  const evEntries = Object.entries(pp).map(([name, agg]) => {
+    const wArr = wp[name];
+    const netWon = wArr ? wArr[wArr.length - 1] : null;
+    const evAdj = netWon != null ? netWon - agg.diff : null;
+    return { name, count: agg.count, netWon, avgEq: agg.avgEquity, winPct: agg.winPct, allinWon: agg.actual, allinEv: agg.ev, evAdj, diff: agg.diff };
+  });
+  evEntries.sort((a, b) => {
+    const va = a[_evSortCol] ?? -Infinity;
+    const vb = b[_evSortCol] ?? -Infinity;
+    return _evSortDir === 'asc' ? va - vb : vb - va;
+  });
+
+  let html = '<h3 style="font-size:0.95rem;color:var(--text-primary);margin-bottom:0.75rem;">Per-Player All-in Summary</h3>';
+  html += `<table class="ev-table"><thead><tr>
+    <th>Player</th>
+    <th class="num sortable" onclick="evSort('count')"># All-ins${evIcon('count')}</th>
+    <th class="num sortable" onclick="evSort('avgEq')">Avg Equity${evIcon('avgEq')}</th>
+    <th class="num sortable" onclick="evSort('winPct')">Win %${evIcon('winPct')}</th>
+    <th class="num sortable" onclick="evSort('allinWon')">All-in Won${evIcon('allinWon')}</th>
+    <th class="num sortable" onclick="evSort('allinEv')">All-in EV${evIcon('allinEv')}</th>
+    <th class="num sortable" onclick="evSort('diff')">All-in Diff${evIcon('diff')}</th>
+    <th class="num sortable" onclick="evSort('netWon')">Net Won${evIcon('netWon')}</th>
+    <th class="num sortable" onclick="evSort('evAdj')">Expected Winnings${evIcon('evAdj')}</th>
+  </tr></thead><tbody>`;
+
+  for (const r of evEntries) {
+    const cls = v => v > 0.005 ? 'positive' : v < -0.005 ? 'negative' : 'neutral';
+    const fmt = v => (v > 0 ? '+' : '') + '$' + v.toFixed(2);
+    const netClass = r.netWon != null ? cls(r.netWon) : '';
+    const eqClass = r.avgEq >= 50 ? 'positive' : 'negative';
+    const diffClass = cls(r.diff);
+    const evAdjClass = r.evAdj != null ? cls(r.evAdj) : '';
+    const winClass = r.winPct > r.avgEq + 0.5 ? 'positive' : r.winPct < r.avgEq - 0.5 ? 'negative' : 'neutral';
+    html += `<tr><td><a href="#" class="player-link" onclick="showEvChart(this.textContent); return false">${esc(r.name)}</a></td><td class="num">${r.count}</td>`;
+    html += `<td class="num ${eqClass}">${r.avgEq.toFixed(1)}%</td>`;
+    html += `<td class="num ${winClass}">${r.winPct.toFixed(1)}%</td>`;
+    const allinWonClass = cls(r.allinWon);
+    const allinEvClass = cls(r.allinEv);
+    html += `<td class="num ${allinWonClass}">${fmt(r.allinWon)}</td>`;
+    html += `<td class="num ${allinEvClass}">${fmt(r.allinEv)}</td>`;
+    html += `<td class="num ${diffClass}">${fmt(r.diff)}</td>`;
+    html += `<td class="num ${netClass}">${r.netWon != null ? fmt(r.netWon) : '—'}</td>`;
+    html += `<td class="num ${evAdjClass}">${r.evAdj != null ? fmt(r.evAdj) : '—'}</td></tr>`;
+  }
+  html += '</tbody></table>';
+
+  // Summary line with found/analyzed counts and skip reasons
+  const found = ev.totalAllin || rows.length;
+  const analyzed = ev.totalAnalyzed || rows.length;
+  const skipped = found - analyzed;
+  let summary = `${analyzed} all-in hands analyzed`;
+  if (skipped > 0) {
+    const reasons = ev.skipReasons || {};
+    const parts = Object.entries(reasons).map(([r, n]) => `${n} ${r}`);
+    summary += ` (${skipped} skipped — ${parts.join(', ') || 'see details'})`;
+  }
+  html += `<p style="margin-top:1rem;color:var(--text-muted);font-size:0.85rem;">${summary}</p>`;
+
+  // Recompute controls
+  const cachedBadge = _evFromCache ? `<span style="font-size:0.7rem;font-weight:700;color:var(--accent);background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);padding:2px 8px;border-radius:10px;letter-spacing:0.04em;">CACHED</span>` : '';
+  html += `<div style="margin-top:0.75rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+    ${cachedBadge}
+    <label style="color:var(--text-tertiary);font-size:0.85rem;">Trials: <input type="number" id="evTrials" value="${_lastEvTrials}" min="500" max="500000" step="1000" style="width:80px;padding:0.3rem;background:var(--bg-input);border:1px solid var(--border-strong);border-radius:4px;color:var(--text-primary);font-size:0.85rem;"></label>
+    <button class="btn btn-sm btn-outline" onclick="computeEV()">Recompute</button>
+    <a href="#" onclick="clearEvCache(); return false" style="color:var(--text-muted);font-size:0.75rem;text-decoration:underline dashed;">Clear cache</a>
+  </div>`;
+
+  document.getElementById('evContent').innerHTML = html;
+}
+
+function evSort(col) {
+  if (_evSortCol === col) _evSortDir = _evSortDir === 'asc' ? 'desc' : 'asc';
+  else { _evSortCol = col; _evSortDir = 'desc'; }
+  if (_evData) renderEV(_evData);
+}
+
+async function computeEV() {
+  if (!_lastUploadedFile) {
+    document.getElementById('evContent').innerHTML = '<p class="error">No file data available. Please re-upload your CSV.</p>';
+    return;
+  }
+
+  const trialsInput = document.getElementById('evTrials');
+  const trials = trialsInput ? parseInt(trialsInput.value) || 5000 : 5000;
+  _lastEvTrials = trials;
+
+  document.getElementById('evContent').innerHTML = `
+    <div id="evProgressArea">
+      <div style="margin-bottom:0.75rem">
+        <span id="evProgressText" style="color:var(--text-secondary);font-size:0.85rem;">Scanning for all-in hands...</span>
+      </div>
+      <div style="width:100%;height:6px;background:var(--bg-input);border-radius:3px;overflow:hidden;">
+        <div id="evProgressBar" style="height:100%;width:0%;background:#22c55e;border-radius:3px;transition:width 0.3s;"></div>
+      </div>
+    </div>`;
+
+  try {
+    const res = await fetch('/api/stats/ev?trials=' + trials, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: _lastUploadedFile,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Server returned ${res.status}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let result = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop();
+
+      for (const part of parts) {
+        if (!part.startsWith('data: ')) continue;
+        const data = JSON.parse(part.slice(6));
+
+        if (data.error) {
+          throw new Error(data.error);
+        } else if (data.done) {
+          result = data;
+        } else if (data.progress !== undefined) {
+          const pct = data.total > 0 ? Math.round(data.progress / data.total * 100) : 0;
+          const bar = document.getElementById('evProgressBar');
+          const text = document.getElementById('evProgressText');
+          if (bar) bar.style.width = pct + '%';
+          if (text) text.textContent = data.total === 0
+            ? 'No all-in hands found'
+            : `Computing hand ${data.progress} of ${data.total}...`;
+        }
+      }
+    }
+
+    if (result) {
+      result.computed = true;
+      _evFromCache = false;
+      _evCacheSave(_sessionKey(), {trials: _lastEvTrials, evData: result, savedAt: Date.now()});
+      _evData = result;
+      _evData.merged = _applyMergesToEv(_evData);
+      renderEV(_evData);
+    } else {
+      throw new Error('No result received from server');
+    }
+  } catch (err) {
+    document.getElementById('evContent').innerHTML = `<p class="error">EV Error: ${esc(err.message)}</p><button class="btn btn-sm btn-outline" style="margin-top:0.5rem" onclick="computeEV()">Retry</button>`;
+  }
+}
+
+function showEvChart(playerName) {
+  if (!_evData || !_statsData || !_statsData.winnings) return;
+  const stSrc = _statsData.merged || _statsData;
+  const evSrc = _evData.merged || _evData;
+  const wp = stSrc.winnings.players || {};
+  const wArr = wp[playerName];
+  if (!wArr) return;
+
+  const handLabels = stSrc.winnings.handLabels || [];
+  const evRows = evSrc.evRows || [];
+
+  const diffByHand = {};
+  for (const row of evRows) {
+    for (const p of row.players || []) {
+      if (p.name === playerName) {
+        diffByHand[row.handNumber] = (diffByHand[row.handNumber] || 0) + p.diff;
+      }
+    }
+  }
+
+  const actualData = [];
+  const evAdjData = [];
+  let cumDiff = 0;
+
+  for (let i = 0; i < wArr.length; i++) {
+    actualData.push(wArr[i]);
+    if (i > 0) {
+      const hn = handLabels[i - 1];
+      if (diffByHand[hn] !== undefined) cumDiff += diffByHand[hn];
+    }
+    evAdjData.push(Math.round((wArr[i] - cumDiff) * 100) / 100);
+  }
+
+  const xLabels = ['0', ...handLabels];
+
+  const overlay = document.createElement('div');
+  overlay.className = 'hh-overlay';
+  overlay.innerHTML = `<div class="hh-panel" style="max-width:800px;">
+    <div class="hh-header">
+      <div><h2>${esc(playerName)}</h2><div class="hh-sub">Actual vs Expected Winnings</div></div>
+      <button class="hh-close" onclick="this.closest('.hh-overlay').remove()">&times;</button>
+    </div>
+    <div style="padding:1rem;height:400px;">
+      <canvas id="evChartCanvas"></canvas>
+    </div>
+  </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+
+  const handler = e => { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', handler); } };
+  document.addEventListener('keydown', handler);
+
+  const ctx = document.getElementById('evChartCanvas').getContext('2d');
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: xLabels,
+      datasets: [
+        { label: 'Actual', data: actualData, borderColor: '#22c55e', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.1 },
+        { label: 'Expected Winnings', data: evAdjData, borderColor: '#f59e0b', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 0, tension: 0.1 },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { color: _chartColors().legend, usePointStyle: true, pointStyle: 'line', padding: 12 } },
+        tooltip: {
+          backgroundColor: _chartColors().tooltipBg,
+          borderColor: _chartColors().tooltipBorder,
+          borderWidth: 1,
+          titleColor: _chartColors().tooltipTitle,
+          bodyColor: _chartColors().tooltipBody,
+          callbacks: { label: ctx => `${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)}` },
+        },
+      },
+      scales: {
+        x: { display: true, title: { display: true, text: 'Hands', color: _chartColors().title }, ticks: { color: _chartColors().tick, maxTicksLimit: 10 }, grid: { color: _chartColors().grid } },
+        y: { display: true, title: { display: true, text: 'Winnings ($)', color: _chartColors().title }, ticks: { color: _chartColors().tick, callback: v => '$' + v }, grid: { color: _chartColors().grid } },
+      },
+    },
+  });
+}
+
 // ===== HAND HISTORY MODAL =====
 const _GT_LABELS = {th:"Hold'em",he:"Hold'em",oh:'Omaha',plo:'PLO',plo5:'PLO5'};
 
@@ -1536,7 +1929,8 @@ let _hhPlayer = null;
 
 function showHandHistory(playerName, sortCol, sortDir) {
   if (!_statsData || !_statsData.handHistory) return;
-  const hands = _statsData.handHistory[playerName];
+  const stSrc = _statsData.merged || _statsData;
+  const hands = (stSrc.handHistory || {})[playerName];
   if (!hands || !hands.length) return;
 
   _hhPlayer = playerName;
@@ -1575,6 +1969,9 @@ function showHandHistory(playerName, sortCol, sortDir) {
     body += `<span class="hh-num">#${esc(String(h.hand))}</span>`;
     if (tag) body += `<span class="hh-type">${tag}</span>`;
     if (h.dbOutcome) { const dbLabel = h.dbOutcome === 'threequarter' ? '3/4' : h.dbOutcome.toUpperCase(); body += `<span class="hh-db-badge hh-db-${h.dbOutcome}">${dbLabel}</span>`; }
+    if (_lastUploadedFile) {
+      body += ` <button class="hh-replay-btn" onclick="event.stopPropagation(); showHandReplay('${esc(String(h.hand))}')" title="Replay hand">▶</button>`;
+    }
     body += `<span class="hh-delta ${dc}">${ds}</span></div>`;
 
     if (h.cards && h.cards.length) {
@@ -1638,6 +2035,164 @@ function hhSort(col) {
 function hhFilter(key) {
   _hhFilter = _hhFilter === key ? null : key;
   if (_hhPlayer) showHandHistory(_hhPlayer);
+}
+
+// ===== HAND REPLAYER =====
+let _replayHand = null;
+let _replayIdx = -1;
+
+async function showHandReplay(handNumber) {
+  if (!_lastUploadedFile) return;
+
+  // Close any existing replay first to avoid stacking modals + leaked listeners
+  document.querySelectorAll('.replay-overlay').forEach(o => {
+    if (o._replayCleanup) o._replayCleanup();
+    o.remove();
+  });
+
+  const overlay = document.createElement('div');
+  overlay.className = 'hh-overlay replay-overlay';
+  overlay.innerHTML = `<div class="hh-panel" style="max-width:780px;">
+    <div class="hh-header">
+      <div><h2>Hand #${esc(String(handNumber))}</h2><div class="hh-sub" id="replaySub">Loading...</div></div>
+      <button class="hh-close" id="replayCloseBtn">&times;</button>
+    </div>
+    <div class="hh-body" id="replayBody"><div style="padding:1rem;color:var(--text-tertiary)">Loading hand...</div></div>
+  </div>`;
+  document.body.appendChild(overlay);
+
+  const handler = e => {
+    if (!document.body.contains(overlay)) { document.removeEventListener('keydown', handler); return; }
+    if (e.key === 'Escape') closeReplay();
+    else if (e.key === 'ArrowRight') _replayStep(1);
+    else if (e.key === 'ArrowLeft') _replayStep(-1);
+  };
+  function closeReplay() {
+    document.removeEventListener('keydown', handler);
+    _replayHand = null;
+    _replayIdx = -1;
+    overlay.remove();
+  }
+  overlay._replayCleanup = () => document.removeEventListener('keydown', handler);
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeReplay(); });
+  overlay.querySelector('#replayCloseBtn').addEventListener('click', closeReplay);
+  document.addEventListener('keydown', handler);
+
+  try {
+    const res = await fetch('/api/hand?n=' + encodeURIComponent(handNumber), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: _lastUploadedFile,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Server returned ${res.status}`);
+    }
+    const data = await res.json();
+    _replayHand = data.hand;
+    _replayIdx = -1;
+    _renderReplay();
+  } catch (err) {
+    const body = document.getElementById('replayBody');
+    if (body) body.innerHTML = `<p class="error">Replay error: ${esc(err.message)}</p>`;
+  }
+}
+
+function _renderReplay() {
+  const h = _replayHand;
+  if (!h) return;
+  const sub = document.getElementById('replaySub');
+  const body = document.getElementById('replayBody');
+  if (!sub || !body) return;
+
+  const gt = _GT_LABELS[h.gameType] || h.gameType || '';
+  sub.innerHTML = `${gt}${h.bombPot ? ' · BOMB POT' : ''} · ${h.events.length} events`;
+
+  // Compute board state and folded set up to current step
+  const board1 = []; const board2 = [];
+  const folded = new Set();
+  const stacks = {}; // seat → current stack delta
+  for (let i = 0; i <= _replayIdx && i < h.events.length; i++) {
+    const e = h.events[i];
+    if (e.kind === 'community') {
+      const cards = e.cards || [];
+      if (e.board === 2) board2.push(...cards);
+      else board1.push(...cards);
+    } else if (e.kind === 'fold') {
+      folded.add(e.seat);
+    }
+  }
+
+  // Players row
+  const seatOrder = (h.players || []).slice().sort((a, b) => a.seat - b.seat);
+  const playerCards = seatOrder.map(p => {
+    const isFolded = folded.has(p.seat);
+    const cards = (h.holeCards && h.holeCards[String(p.seat)]) || [];
+    const cardsHtml = cards.length ? cards.map(_pc).join(' ')
+      : '<span style="color:#475569;font-style:italic;font-size:0.75rem;">not shown</span>';
+    return `<div class="replay-seat${isFolded ? ' folded' : ''}">
+      <div class="replay-name">${esc(p.name)}</div>
+      <div class="replay-cards">${cardsHtml}</div>
+      <div class="replay-stack">$${(p.stack || 0).toFixed(2)}</div>
+    </div>`;
+  }).join('');
+
+  const padBoard = (cards) => {
+    const out = [];
+    for (let i = 0; i < 5; i++) {
+      out.push(cards[i] ? _pc(cards[i]) : '<span class="replay-card-placeholder">·</span>');
+    }
+    return out.join(' ');
+  };
+
+  const isDouble = (h.events || []).some(e => e.kind === 'community' && e.board === 2);
+  const board1Html = `<div class="replay-board-row"><span class="replay-board-label">${isDouble ? 'BOARD 1' : 'BOARD'}</span><span class="replay-board-cards">${padBoard(board1)}</span></div>`;
+  const board2Html = isDouble ? `<div class="replay-board-row"><span class="replay-board-label">BOARD 2</span><span class="replay-board-cards">${padBoard(board2)}</span></div>` : '';
+
+  // Action log
+  const log = h.events.map((e, i) => {
+    const cls = i === _replayIdx ? ' replay-event-current' : i < _replayIdx ? ' replay-event-past' : ' replay-event-future';
+    const kindCls = ` replay-kind-${e.kind}`;
+    return `<div class="replay-event${cls}${kindCls}">
+      <span class="replay-event-num">${i + 1}</span>
+      <span class="replay-event-text">${esc(e.text || e.kind)}</span>
+    </div>`;
+  }).join('');
+
+  const atStart = _replayIdx <= -1;
+  const atEnd = _replayIdx >= h.events.length - 1;
+
+  body.innerHTML = `
+    <div class="replay-table">
+      <div class="replay-players">${playerCards}</div>
+      ${board1Html}${board2Html}
+    </div>
+    <div class="replay-controls">
+      <button class="btn btn-sm" onclick="_replayStep(-1)" ${atStart ? 'disabled' : ''}>‹ Prev</button>
+      <span style="color:var(--text-muted);font-size:0.85rem;">${_replayIdx + 1} / ${h.events.length}</span>
+      <button class="btn btn-sm" onclick="_replayStep(1)" ${atEnd ? 'disabled' : ''}>Next ›</button>
+      <button class="btn btn-sm btn-outline" onclick="_replayJump(${h.events.length - 1})">Jump to end</button>
+      <button class="btn btn-sm btn-outline" onclick="_replayJump(-1)">Reset</button>
+    </div>
+    <div class="replay-log">${log}</div>
+  `;
+
+  // Auto-scroll to current event
+  const cur = body.querySelector('.replay-event-current');
+  if (cur) cur.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+}
+
+function _replayStep(delta) {
+  if (!_replayHand) return;
+  const max = _replayHand.events.length - 1;
+  _replayIdx = Math.max(-1, Math.min(max, _replayIdx + delta));
+  _renderReplay();
+}
+function _replayJump(idx) {
+  if (!_replayHand) return;
+  _replayIdx = idx;
+  _renderReplay();
 }
 
 
@@ -1720,14 +2275,362 @@ function bpSort(col) {
 let _ledgerData = null;
 let _forcedPairs = [];
 let _settlementMultiplied = false;
+// Merge shape: [{from: {id?, name}, into: {id?, name}}, ...]
 let _playerMerges = [];
+
+function _mergesLoad() {
+  const key = _sessionKey();
+  if (!key) return;
+  try {
+    const raw = localStorage.getItem('pn-merges:' + key);
+    if (raw) _playerMerges = JSON.parse(raw) || [];
+  } catch (e) { _playerMerges = []; }
+}
+function _mergesSave() {
+  const key = _sessionKey();
+  if (!key) return;
+  try { localStorage.setItem('pn-merges:' + key, JSON.stringify(_playerMerges)); } catch (e) {}
+}
+function _mergesReset() {
+  _playerMerges = [];
+  const key = _sessionKey();
+  if (key) { try { localStorage.removeItem('pn-merges:' + key); } catch (e) {} }
+  applyMergesEverywhere();
+}
+
+// Build map: aliasName → canonicalName, with chain resolution
+function _buildAliasMap() {
+  const direct = {};
+  for (const m of _playerMerges) {
+    if (m && m.from && m.into && m.from.name && m.into.name && m.from.name !== m.into.name) {
+      direct[m.from.name] = m.into.name;
+    }
+  }
+  const resolved = {};
+  for (const from of Object.keys(direct)) {
+    let cur = direct[from];
+    const seen = new Set([from]);
+    while (direct[cur] && !seen.has(cur)) { seen.add(cur); cur = direct[cur]; }
+    resolved[from] = cur;
+  }
+  return resolved;
+}
+
+// Parse a "n/d" sample string into {n, d} numbers, or null
+function _parseSample(s) {
+  if (!s || typeof s !== 'string') return null;
+  const m = s.match(/^(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)$/);
+  return m ? { n: parseFloat(m[1]), d: parseFloat(m[2]) } : null;
+}
+function _formatSample(n, d) {
+  const fmt = v => Number.isInteger(v) ? String(v) : v.toFixed(1);
+  return `${fmt(n)}/${fmt(d)}`;
+}
+
+// Merge two stats rows. Reaggregates pct fields via samples; sums raw counts; weighted-averages by handsPlayed when no sample.
+function _mergeStatsRow(into, from) {
+  const out = {...into};
+  out.handsPlayed = (into.handsPlayed || 0) + (from.handsPlayed || 0);
+  // Samples: combine n/d
+  const intoSamples = into.samples || {};
+  const fromSamples = from.samples || {};
+  const newSamples = {...intoSamples};
+  const allSampleKeys = new Set([...Object.keys(intoSamples), ...Object.keys(fromSamples)]);
+  // 'af' is a ratio (br / calls), not a percentage
+  const RATIO_FIELDS = new Set(['af']);
+  for (const k of allSampleKeys) {
+    const a = _parseSample(intoSamples[k]);
+    const b = _parseSample(fromSamples[k]);
+    if (a && b) {
+      const n = a.n + b.n, d = a.d + b.d;
+      newSamples[k] = _formatSample(n, d);
+      // Recompute matching numeric field (same key)
+      if (typeof into[k] === 'number' || typeof from[k] === 'number') {
+        if (RATIO_FIELDS.has(k)) {
+          out[k] = d > 0 ? Math.round((n / d) * 100) / 100 : (n > 0 ? n : 0);
+        } else {
+          out[k] = d > 0 ? (n / d * 100) : 0;
+        }
+      }
+    } else if (a) {
+      newSamples[k] = intoSamples[k];
+    } else if (b) {
+      newSamples[k] = fromSamples[k];
+      if (typeof from[k] === 'number') out[k] = from[k];
+    }
+  }
+  out.samples = newSamples;
+
+  // Sum raw integer fields not covered by samples
+  const RAW_FIELDS = ['bpHandsPlayed', 'bpDbShowdowns'];
+  for (const f of RAW_FIELDS) {
+    out[f] = (into[f] || 0) + (from[f] || 0);
+  }
+
+  // Weighted-average any percentage field that didn't get a sample-based recompute
+  const WEIGHTED = ['vpip','pfr','threeBet','fourBet','foldTo3Bet','foldTo4Bet','cbet','cbetTurn','foldToCbet','tripleBarrel','stealAttempt','foldToStealSB','foldToStealBB','wtsd','wsd','donkBet','afq','bpVpip','bpScoop','bpChop','bpQuartered','bpThreequarter'];
+  for (const f of WEIGHTED) {
+    if (newSamples[f]) continue; // already exact
+    const aw = into.handsPlayed || 0, bw = from.handsPlayed || 0;
+    if (typeof into[f] === 'number' && typeof from[f] === 'number' && (aw + bw) > 0) {
+      out[f] = (into[f] * aw + from[f] * bw) / (aw + bw);
+    } else if (typeof from[f] === 'number') {
+      out[f] = from[f];
+    }
+  }
+
+  // 'af' string is "calls/raises" — sum if both parseable
+  const aAf = _parseSample(into.af);
+  const bAf = _parseSample(from.af);
+  if (aAf && bAf) out.af = _formatSample(aAf.n + bAf.n, aAf.d + bAf.d);
+
+  return out;
+}
+
+function _applyMergesToStats(raw) {
+  const aliasMap = _buildAliasMap();
+  const hasAny = Object.keys(aliasMap).length > 0;
+  if (!hasAny) return raw;
+
+  const merged = {...raw};
+  delete merged.merged; // don't carry the previous merged-snapshot forward
+
+  // stats[]
+  if (Array.isArray(raw.stats)) {
+    const byName = {};
+    for (const row of raw.stats) {
+      const canon = aliasMap[row.name] || row.name;
+      byName[canon] = byName[canon] ? _mergeStatsRow(byName[canon], {...row, name: canon}) : {...row, name: canon};
+    }
+    merged.stats = Object.values(byName);
+  }
+
+  // winnings.players: elementwise sum
+  if (raw.winnings && raw.winnings.players) {
+    const out = {};
+    for (const [name, arr] of Object.entries(raw.winnings.players)) {
+      const canon = aliasMap[name] || name;
+      if (!out[canon]) out[canon] = arr.slice();
+      else {
+        const len = Math.min(out[canon].length, arr.length);
+        for (let i = 0; i < len; i++) out[canon][i] = Math.round((out[canon][i] + arr[i]) * 100) / 100;
+      }
+    }
+    merged.winnings = {...raw.winnings, players: out};
+  }
+
+  // handHistory: concat per canonical name, sort by hand
+  if (raw.handHistory) {
+    const out = {};
+    for (const [name, hands] of Object.entries(raw.handHistory)) {
+      const canon = aliasMap[name] || name;
+      out[canon] = (out[canon] || []).concat(hands);
+    }
+    for (const k of Object.keys(out)) {
+      out[k].sort((a, b) => Number(a.hand) - Number(b.hand));
+    }
+    merged.handHistory = out;
+  }
+
+  // biggestPots: rewrite player names
+  if (Array.isArray(raw.biggestPots)) {
+    merged.biggestPots = raw.biggestPots.map(pot => ({
+      ...pot,
+      players: (pot.players || []).map(p => ({...p, name: aliasMap[p.name] || p.name})),
+    }));
+  }
+
+  return merged;
+}
+
+function _applyMergesToEv(raw) {
+  const aliasMap = _buildAliasMap();
+  if (Object.keys(aliasMap).length === 0) return raw;
+
+  const merged = {...raw};
+  delete merged.merged;
+
+  // perPlayer: sum count/actual/ev/diff; weighted-avg avgEquity/winPct by count
+  if (raw.perPlayer) {
+    const out = {};
+    for (const [name, agg] of Object.entries(raw.perPlayer)) {
+      const canon = aliasMap[name] || name;
+      if (!out[canon]) {
+        out[canon] = {...agg};
+      } else {
+        const a = out[canon], b = agg;
+        const totalCount = (a.count || 0) + (b.count || 0);
+        out[canon] = {
+          count: totalCount,
+          actual: Math.round(((a.actual || 0) + (b.actual || 0)) * 100) / 100,
+          ev: Math.round(((a.ev || 0) + (b.ev || 0)) * 100) / 100,
+          diff: Math.round(((a.diff || 0) + (b.diff || 0)) * 100) / 100,
+          avgEquity: totalCount > 0 ? ((a.avgEquity || 0) * (a.count || 0) + (b.avgEquity || 0) * (b.count || 0)) / totalCount : 0,
+          winPct: totalCount > 0 ? ((a.winPct || 0) * (a.count || 0) + (b.winPct || 0) * (b.count || 0)) / totalCount : 0,
+        };
+      }
+    }
+    merged.perPlayer = out;
+  }
+
+  // evRows: rewrite player names within each row
+  if (Array.isArray(raw.evRows)) {
+    merged.evRows = raw.evRows.map(row => ({
+      ...row,
+      players: (row.players || []).map(p => ({...p, name: aliasMap[p.name] || p.name})),
+    }));
+  }
+
+  return merged;
+}
+
+function applyMergesEverywhere() {
+  if (_statsData) _statsData.merged = _applyMergesToStats(_statsData);
+  if (_evData) _evData.merged = _applyMergesToEv(_evData);
+
+  // Re-render every dependent view that's currently mounted
+  if (_ledgerData) _renderLedgerView();
+  if (_statsData) {
+    if (typeof renderStatsTable === 'function') renderStatsTable();
+    const w = (_statsData.merged || _statsData).winnings;
+    if (w) renderWinningsChart(w);
+    const bp = (_statsData.merged || _statsData).biggestPots;
+    if (bp) renderBiggestPots(bp);
+  }
+  if (_evData) renderEV(_evData);
+
+  // Close any open hand-history modal so the next open uses merged data
+  // Close hand-history overlays (so they re-open with merged data) — but NOT the merge modal or active replay
+  document.querySelectorAll('.hh-overlay:not(.merge-overlay):not(.replay-overlay)').forEach(o => o.remove());
+}
+
+// Union of all known players across ledger + stats + EV
+function _getAllKnownPlayers() {
+  const seen = new Map(); // name → {id?, name}
+  if (_ledgerData) {
+    for (const p of _ledgerData.players) {
+      seen.set(p.name, {id: p.id, name: p.name});
+    }
+  }
+  if (_statsData) {
+    const src = _statsData; // use raw, not merged — we want to see all pre-merge identities
+    for (const s of src.stats || []) {
+      if (!seen.has(s.name)) seen.set(s.name, {name: s.name});
+    }
+  }
+  if (_evData) {
+    const ev = _evData;
+    for (const name of Object.keys(ev.perPlayer || {})) {
+      if (!seen.has(name)) seen.set(name, {name});
+    }
+  }
+  return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function openMergeModal() {
+  // Close any existing
+  document.querySelectorAll('.merge-overlay').forEach(o => o.remove());
+
+  const overlay = document.createElement('div');
+  overlay.className = 'hh-overlay merge-overlay';
+  overlay.innerHTML = `<div class="hh-panel" style="max-width:560px;">
+    <div class="hh-header">
+      <div><h2>Combine players</h2><div class="hh-sub">Merges apply across Ledger, Stats, and Equity</div></div>
+      <button class="hh-close" onclick="this.closest('.hh-overlay').remove()">&times;</button>
+    </div>
+    <div class="hh-body" id="mergeModalBody"></div>
+  </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  _renderMergeModalBody();
+}
+
+function _renderMergeModalBody() {
+  const body = document.getElementById('mergeModalBody');
+  if (!body) return;
+  const all = _getAllKnownPlayers();
+  if (all.length < 2) {
+    body.innerHTML = '<p style="color:var(--text-tertiary);padding:1rem 0;">Need at least 2 known players. Load a ledger or upload stats first.</p>';
+    return;
+  }
+
+  const opts = (selected) => all.map(p =>
+    `<option value="${esc(p.name)}"${p.name === selected ? ' selected' : ''}>${esc(p.name)}${p.id ? '' : ' (stats only)'}</option>`
+  ).join('');
+
+  let html = '';
+  if (_playerMerges.length > 0) {
+    html += '<div style="margin-bottom:0.75rem;color:var(--text-tertiary);font-size:0.8rem;">Active merges</div>';
+    for (let k = 0; k < _playerMerges.length; k++) {
+      const m = _playerMerges[k];
+      html += `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem;">
+        <select onchange="_mergeModalSet(${k}, 'from', this.value)" style="flex:1;padding:0.35rem 0.5rem;background:var(--bg-input);border:1px solid var(--border-default);color:var(--text-primary);border-radius:4px;font-size:0.85rem;">${opts(m.from && m.from.name)}</select>
+        <span style="color:var(--text-muted);">→</span>
+        <select onchange="_mergeModalSet(${k}, 'into', this.value)" style="flex:1;padding:0.35rem 0.5rem;background:var(--bg-input);border:1px solid var(--border-default);color:var(--text-primary);border-radius:4px;font-size:0.85rem;">${opts(m.into && m.into.name)}</select>
+        <button onclick="_mergeModalRemove(${k})" style="background:none;border:none;color:var(--text-muted);font-size:1.2rem;cursor:pointer;padding:0 0.4rem;" title="Remove">&times;</button>
+      </div>`;
+    }
+  } else {
+    html += '<p style="color:var(--text-tertiary);font-size:0.85rem;margin-bottom:0.75rem;">No merges yet. Add one to combine two player aliases into one across all pages.</p>';
+  }
+
+  html += `<div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap">
+    <button class="btn btn-sm" onclick="_mergeModalAdd()">+ Add merge</button>
+    ${_playerMerges.length > 0 ? '<button class="btn btn-sm btn-outline" onclick="if(confirm(\'Reset all merges?\')) { _mergesReset(); _renderMergeModalBody(); }">Reset all</button>' : ''}
+  </div>`;
+  html += `<p style="margin-top:1rem;color:var(--text-muted);font-size:0.75rem;">Merges are saved per game (browser-local). Same browser will remember them across reloads; different browsers/devices won't share.</p>`;
+
+  body.innerHTML = html;
+}
+
+function _mergeModalAdd() {
+  const all = _getAllKnownPlayers();
+  if (all.length < 2) return;
+  // Pick two distinct defaults: largest by ledger net if available, else first two
+  let into = all[0], from = all[1];
+  if (_ledgerData) {
+    const sorted = _ledgerData.players.slice().sort((a, b) => b.net - a.net);
+    if (sorted[0]) into = {id: sorted[0].id, name: sorted[0].name};
+    if (sorted[1]) from = {id: sorted[1].id, name: sorted[1].name};
+  }
+  _playerMerges.push({from, into});
+  _mergesSave();
+  applyMergesEverywhere();
+  _renderMergeModalBody();
+}
+
+function _mergeModalSet(k, side, name) {
+  const all = _getAllKnownPlayers();
+  const p = all.find(x => x.name === name);
+  if (!p) return;
+  _playerMerges[k][side] = {id: p.id, name: p.name};
+  _mergesSave();
+  applyMergesEverywhere();
+  _renderMergeModalBody();
+}
+
+function _mergeModalRemove(k) {
+  _playerMerges.splice(k, 1);
+  _mergesSave();
+  applyMergesEverywhere();
+  _renderMergeModalBody();
+}
 
 function _getEffectivePlayers() {
   if (!_ledgerData) return [];
   const players = _ledgerData.players.map(p => ({...p}));
   for (const merge of _playerMerges) {
-    const fromIdx = players.findIndex(p => p.id === merge.from);
-    const intoIdx = players.findIndex(p => p.id === merge.into);
+    if (!merge.from || !merge.into) continue;
+    // Prefer id-match (stable). Fall back to name-match for stats-only merges.
+    const findIdx = (target) => {
+      if (target.id) {
+        const i = players.findIndex(p => p.id === target.id);
+        if (i !== -1) return i;
+      }
+      return players.findIndex(p => p.name === target.name);
+    };
+    const fromIdx = findIdx(merge.from);
+    const intoIdx = findIdx(merge.into);
     if (fromIdx === -1 || intoIdx === -1 || fromIdx === intoIdx) continue;
     players[intoIdx].buyin = Math.round((players[intoIdx].buyin + players[fromIdx].buyin) * 100) / 100;
     players[intoIdx].cashout = Math.round((players[intoIdx].cashout + players[fromIdx].cashout) * 100) / 100;
@@ -1867,32 +2770,62 @@ function _renderMergeControls() {
     return;
   }
   const all = _ledgerData.players;
+  const byId = id => all.find(p => p.id === id);
   let html = '<div class="controls-section">';
   if (_playerMerges.length > 0) html += '<div class="controls-title">Combined Players</div>';
   for (let k = 0; k < _playerMerges.length; k++) {
     const m = _playerMerges[k];
-    if (m.into === m.from) m.into = all.find(p => p.id !== m.from)?.id || m.into;
+    if (!m.from || !m.into) continue;
+    if (m.into.id && m.from.id && m.into.id === m.from.id) {
+      const other = all.find(p => p.id !== m.from.id);
+      if (other) m.into = { id: other.id, name: other.name };
+    }
     html += `<div class="control-row">
-      <select onchange="_playerMerges[${k}].from=this.value;_renderLedgerView()">
-        ${all.map(p => `<option value="${esc(p.id)}"${p.id===m.from?' selected':''}>${esc(_mergeLabel(p))}</option>`).join('')}
+      <select onchange="_mergeSetFrom(${k}, this.value)">
+        ${all.map(p => `<option value="${esc(p.id)}"${p.id===m.from.id?' selected':''}>${esc(_mergeLabel(p))}</option>`).join('')}
       </select>
       <span class="control-label">&#x2192;</span>
-      <select onchange="_playerMerges[${k}].into=this.value;_renderLedgerView()">
-        ${all.filter(p => p.id !== m.from).map(p => `<option value="${esc(p.id)}"${p.id===m.into?' selected':''}>${esc(_mergeLabel(p))}</option>`).join('')}
+      <select onchange="_mergeSetInto(${k}, this.value)">
+        ${all.filter(p => p.id !== m.from.id).map(p => `<option value="${esc(p.id)}"${p.id===m.into.id?' selected':''}>${esc(_mergeLabel(p))}</option>`).join('')}
       </select>
-      <button class="control-remove" onclick="_playerMerges.splice(${k},1);_renderLedgerView()">&times;</button>
+      <button class="control-remove" onclick="_mergeRemove(${k})">&times;</button>
     </div>`;
   }
   html += `<button class="control-add" onclick="_addPlayerMerge()">+ Combine players</button>`;
+  if (_playerMerges.length > 0) {
+    html += `<button class="control-add" style="margin-left:0.5rem;opacity:0.7" onclick="_mergesReset()">Reset all merges</button>`;
+  }
   html += '</div>';
   document.getElementById('mergeControls').innerHTML = html;
 }
 
+function _mergeSetFrom(k, id) {
+  const p = _ledgerData.players.find(x => x.id === id);
+  if (p) _playerMerges[k].from = { id: p.id, name: p.name };
+  _mergesSave();
+  applyMergesEverywhere();
+}
+function _mergeSetInto(k, id) {
+  const p = _ledgerData.players.find(x => x.id === id);
+  if (p) _playerMerges[k].into = { id: p.id, name: p.name };
+  _mergesSave();
+  applyMergesEverywhere();
+}
+function _mergeRemove(k) {
+  _playerMerges.splice(k, 1);
+  _mergesSave();
+  applyMergesEverywhere();
+}
+
 function _addPlayerMerge() {
-  const all = _ledgerData.players;
+  const all = _ledgerData ? _ledgerData.players : [];
   if (all.length < 2) return;
-  _playerMerges.push({ from: all[1].id, into: all[0].id });
-  _renderLedgerView();
+  _playerMerges.push({
+    from: { id: all[1].id, name: all[1].name },
+    into: { id: all[0].id, name: all[0].name },
+  });
+  _mergesSave();
+  applyMergesEverywhere();
 }
 
 function _renderLedgerView() {
@@ -1926,8 +2859,8 @@ function _renderLedgerView() {
 function renderLedger(data) {
   _ledgerData = data;
   _forcedPairs = [];
-  _playerMerges = [];
-  _renderLedgerView();
+  _mergesLoad();
+  applyMergesEverywhere();
 }
 
 async function analyze() {
@@ -2784,815 +3717,18 @@ function eqRenderSaved() {
   }).join('');
 }
 
-// ===== Hand Picker (CSV-driven equity replay) =====
-let _hpSelected = null;
-
-// ===== Client-side equity engine (Web Worker) =====
-// Source for the worker. Inlined as a string so we can spawn workers via Blob URL
-// without needing a separate static file. The MC logic mirrors the Python backend
-// (compute_equity_double_board + side pots from committed amounts).
-const HP_WORKER_SRC = `
-'use strict';
-const RANK_MAP = {'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'T':10,'J':11,'Q':12,'K':13,'A':14};
-const SUIT_MAP = {'s':0,'h':1,'d':2,'c':3};
-
-function cardToInt(s) { return (RANK_MAP[s[0]] << 2) | SUIT_MAP[s[1]]; }
-function cardsStr(cards) { return cards.map(intToStr).join(' '); }
-const REV_RANK = ['','','2','3','4','5','6','7','8','9','T','J','Q','K','A'];
-const REV_SUIT = ['s','h','d','c'];
-function intToStr(c) { return REV_RANK[c >> 2] + REV_SUIT[c & 3]; }
-
-const STRAIGHT_MASKS = [];
-for (let top = 14; top >= 5; top--) STRAIGHT_MASKS.push([top, 0x1f << (top - 4)]);
-
-// Returns a comparable strength array. Bigger = better.
-function eval5(c0, c1, c2, c3, c4) {
-  const r0 = c0 >> 2, r1 = c1 >> 2, r2 = c2 >> 2, r3 = c3 >> 2, r4 = c4 >> 2;
-  const s0 = c0 & 3, s1 = c1 & 3, s2 = c2 & 3, s3 = c3 & 3, s4 = c4 & 3;
-  const isFlush = s0 === s1 && s1 === s2 && s2 === s3 && s3 === s4;
-
-  const cnt = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
-  cnt[r0]++; cnt[r1]++; cnt[r2]++; cnt[r3]++; cnt[r4]++;
-  let mask = (1 << r0) | (1 << r1) | (1 << r2) | (1 << r3) | (1 << r4);
-  if (cnt[14]) mask |= 2;
-
-  let straightTop = 0;
-  for (let i = 0; i < STRAIGHT_MASKS.length; i++) {
-    const m = STRAIGHT_MASKS[i][1];
-    if ((mask & m) === m) { straightTop = STRAIGHT_MASKS[i][0]; break; }
-  }
-
-  if (isFlush && straightTop) return [9, straightTop];
-
-  let quads = 0, trips = 0;
-  const pairs = [], singles = [];
-  for (let r = 14; r >= 2; r--) {
-    const c = cnt[r];
-    if (c === 4) quads = r;
-    else if (c === 3) trips = r;
-    else if (c === 2) pairs.push(r);
-    else if (c === 1) singles.push(r);
-  }
-  if (quads) {
-    const kicker = singles.length ? singles[0] : (pairs.length ? pairs[0] : trips);
-    return [8, quads, kicker];
-  }
-  if (trips && pairs.length) return [7, trips, pairs[0]];
-  if (isFlush) {
-    const arr = [r0, r1, r2, r3, r4]; arr.sort((a, b) => b - a);
-    return [6, arr[0], arr[1], arr[2], arr[3], arr[4]];
-  }
-  if (straightTop) return [5, straightTop];
-  if (trips) return [4, trips, singles[0] || 0, singles[1] || 0];
-  if (pairs.length >= 2) return [3, pairs[0], pairs[1], singles[0] || 0];
-  if (pairs.length === 1) return [2, pairs[0], singles[0] || 0, singles[1] || 0, singles[2] || 0];
-  return [1, singles[0] || 0, singles[1] || 0, singles[2] || 0, singles[3] || 0, singles[4] || 0];
-}
-
-function strGreater(a, b) {
-  const n = a.length < b.length ? a.length : b.length;
-  for (let i = 0; i < n; i++) if (a[i] !== b[i]) return a[i] > b[i];
-  return false;
-}
-function strEqual(a, b) {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-  return true;
-}
-
-// PLO: must use exactly 2 from hole + 3 from board. holeCount in {2,4,5}.
-// For Hold'em we still call this with holeCount=2 (single C(2,2)*C(5,5)=1 path
-// wouldn't work — instead we just run eval5(hole + 3 of board) for all C(5,3) triples).
-// Simpler: always score by trying all 2-from-hole × 3-from-board combos. For Hold'em
-// holeCount=2 so only one h-pair; for PLO/PLO5 we iterate.
-const BOARD_TRIPLES = [];
-for (let a = 0; a < 5; a++)
-  for (let b = a+1; b < 5; b++)
-    for (let c = b+1; c < 5; c++)
-      BOARD_TRIPLES.push([a, b, c]);
-
-function scoreOmaha(hole, board) {
-  let best = null;
-  const n = hole.length;
-  for (let i = 0; i < n; i++) {
-    for (let j = i+1; j < n; j++) {
-      const h0 = hole[i], h1 = hole[j];
-      for (let t = 0; t < 10; t++) {
-        const tr = BOARD_TRIPLES[t];
-        const s = eval5(h0, h1, board[tr[0]], board[tr[1]], board[tr[2]]);
-        if (best === null || strGreater(s, best)) best = s;
-      }
-    }
-  }
-  return best;
-}
-
-function scoreHoldem(hole, board) {
-  // Best-of-7: try all C(5,3) board triples (the 2 hole cards are always used).
-  let best = null;
-  for (let t = 0; t < 10; t++) {
-    const tr = BOARD_TRIPLES[t];
-    const s = eval5(hole[0], hole[1], board[tr[0]], board[tr[1]], board[tr[2]]);
-    if (best === null || strGreater(s, best)) best = s;
-  }
-  // Also: 1-from-hole + 4-from-board
-  for (let i = 0; i < 2; i++) {
-    for (let skip = 0; skip < 5; skip++) {
-      const b = []; for (let k = 0; k < 5; k++) if (k !== skip) b.push(board[k]);
-      const s = eval5(hole[i], b[0], b[1], b[2], b[3]);
-      if (strGreater(s, best)) best = s;
-    }
-  }
-  // Also: play the board (5 board cards only)
-  const sb = eval5(board[0], board[1], board[2], board[3], board[4]);
-  if (strGreater(sb, best)) best = sb;
-  return best;
-}
-
-function buildPotsFromCommitted(committed, deadMoney) {
-  const indexed = committed.map((v, i) => [i, +v || 0]).filter(([i, v]) => v > 0);
-  if (!indexed.length) return null;
-  const caps = Array.from(new Set(indexed.map(p => p[1]))).sort((a, b) => a - b);
-  const pots = [];
-  let prev = 0; let first = true;
-  for (const cap of caps) {
-    const contrib = indexed.filter(p => p[1] >= cap).map(p => p[0]);
-    const layer = cap - prev;
-    if (layer > 0 && contrib.length) {
-      let pot = layer * contrib.length;
-      if (first && deadMoney > 0) { pot += deadMoney; first = false; }
-      pots.push([pot, new Set(contrib)]);
-    }
-    prev = cap;
-  }
-  return pots;
-}
-
-function shuffleInPlace(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = (Math.random() * (i + 1)) | 0;
-    const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
-  }
-}
-
-function computeEquity(payload) {
-  const handsStr = payload.hands;          // [[card str, ...], ...]
-  const boardStr = payload.board || [];
-  const board2Str = payload.board2 || [];
-  const committed = payload.committed || null;
-  const deadMoney = +payload.dead_money || 0;
-  const trials = Math.max(1, Math.min(payload.trials | 0, 200000));
-
-  const isDouble = board2Str.length > 0;
-  const nPlayers = handsStr.length;
-  const nHole = handsStr[0].length;
-  const isOmaha = nHole >= 4;
-
-  const hands = handsStr.map(h => h.map(cardToInt));
-  const board1 = boardStr.map(cardToInt);
-  const board2 = board2Str.map(cardToInt);
-
-  const used = new Set();
-  for (const h of hands) for (const c of h) used.add(c);
-  for (const c of board1) used.add(c);
-  for (const c of board2) used.add(c);
-  const deck = [];
-  for (let i = 0; i < 52; i++) if (!used.has(i)) deck.push(i);
-
-  const missing1 = 5 - board1.length;
-  const missing2 = isDouble ? (5 - board2.length) : 0;
-  const totalMissing = missing1 + missing2;
-  if (missing1 < 0 || missing2 < 0 || totalMissing > deck.length) {
-    throw new Error('Invalid board sizes');
-  }
-
-  const score = isOmaha ? scoreOmaha : scoreHoldem;
-  const wins = Array.from({length: nPlayers}, () => [0, 0]);
-  const ties = Array.from({length: nPlayers}, () => [0, 0]);
-  const shareSum = new Array(nPlayers).fill(0);
-  const payouts = new Array(nPlayers).fill(0);
-  const pots = committed ? buildPotsFromCommitted(committed, deadMoney) : null;
-
-  const fb1 = new Array(5);
-  const fb2 = new Array(5);
-
-  for (let trial = 0; trial < trials; trial++) {
-    shuffleInPlace(deck);
-    for (let k = 0; k < 5; k++) fb1[k] = k < board1.length ? board1[k] : deck[k - board1.length];
-    if (isDouble) {
-      for (let k = 0; k < 5; k++) fb2[k] = k < board2.length ? board2[k] : deck[missing1 + (k - board2.length)];
-    }
-
-    const scores1 = hands.map(h => score(h, fb1));
-    const scores2 = isDouble ? hands.map(h => score(h, fb2)) : null;
-
-    let best1 = scores1[0]; for (let i = 1; i < nPlayers; i++) if (strGreater(scores1[i], best1)) best1 = scores1[i];
-    const winners1 = []; for (let i = 0; i < nPlayers; i++) if (strEqual(scores1[i], best1)) winners1.push(i);
-    let winners2 = null; let best2 = null;
-    if (isDouble) {
-      best2 = scores2[0]; for (let i = 1; i < nPlayers; i++) if (strGreater(scores2[i], best2)) best2 = scores2[i];
-      winners2 = []; for (let i = 0; i < nPlayers; i++) if (strEqual(scores2[i], best2)) winners2.push(i);
-    }
-
-    if (isDouble) {
-      const u1 = 1.0 / winners1.length, u2 = 1.0 / winners2.length;
-      const w1set = new Set(winners1), w2set = new Set(winners2);
-      for (let i = 0; i < nPlayers; i++) {
-        const s1 = w1set.has(i) ? u1 : 0;
-        const s2 = w2set.has(i) ? u2 : 0;
-        shareSum[i] += (s1 + s2) * 0.5;
-        if (w1set.has(i)) (winners1.length === 1 ? wins[i][0]++ : ties[i][0]++);
-        if (w2set.has(i)) (winners2.length === 1 ? wins[i][1]++ : ties[i][1]++);
-      }
-      if (pots) {
-        for (const [potSize, eligible] of pots) {
-          const half = potSize * 0.5;
-          const we1 = winners1.filter(i => eligible.has(i));
-          const we2 = winners2.filter(i => eligible.has(i));
-          if (we1.length) { const s = half / we1.length; for (const i of we1) payouts[i] += s; }
-          if (we2.length) { const s = half / we2.length; for (const i of we2) payouts[i] += s; }
-        }
-      }
-    } else {
-      const u = 1.0 / winners1.length;
-      const wset = new Set(winners1);
-      for (let i = 0; i < nPlayers; i++) {
-        if (wset.has(i)) {
-          shareSum[i] += u;
-          if (winners1.length === 1) wins[i][0]++; else ties[i][0]++;
-        }
-      }
-      if (pots) {
-        for (const [potSize, eligible] of pots) {
-          const we = winners1.filter(i => eligible.has(i));
-          if (we.length) { const s = potSize / we.length; for (const i of we) payouts[i] += s; }
-        }
-      }
-    }
-  }
-
-  const equities = [];
-  for (let i = 0; i < nPlayers; i++) {
-    const overall = trials ? (shareSum[i] / trials * 100) : 0;
-    const entry = { hand: handsStr[i].join(' '), equity: Math.round(overall * 10) / 10 };
-    if (isDouble) {
-      const b1 = trials ? ((wins[i][0] + ties[i][0] / 2) / trials * 100) : 0;
-      const b2 = trials ? ((wins[i][1] + ties[i][1] / 2) / trials * 100) : 0;
-      entry.board1 = { equity: Math.round(b1 * 10) / 10, wins: wins[i][0], ties: ties[i][0], losses: trials - wins[i][0] - ties[i][0] };
-      entry.board2 = { equity: Math.round(b2 * 10) / 10, wins: wins[i][1], ties: ties[i][1], losses: trials - wins[i][1] - ties[i][1] };
-    } else {
-      entry.wins = wins[i][0];
-      entry.ties = ties[i][0];
-    }
-    if (pots) entry.expected_payout = Math.round((payouts[i] / trials) * 100) / 100;
-    equities.push(entry);
-  }
-  return isDouble ? { mode: 'double', trials, equities } : { equities, trials };
-}
-
-self.onmessage = function(e) {
-  const {id, payload} = e.data;
-  try {
-    const result = computeEquity(payload);
-    self.postMessage({id, result});
-  } catch (err) {
-    self.postMessage({id, error: err.message || String(err)});
-  }
-};
-`;
-
-const _hpWorkerPool = (() => {
-  if (typeof Worker === 'undefined') return null;
-  try {
-    const blob = new Blob([HP_WORKER_SRC], {type: 'application/javascript'});
-    const url = URL.createObjectURL(blob);
-    const size = Math.max(1, Math.min(navigator.hardwareConcurrency || 4, 4));
-    const workers = [];
-    for (let i = 0; i < size; i++) workers.push(new Worker(url));
-    const busy = workers.map(() => false);
-    const queue = [];
-    let nextId = 1;
-    const dispatch = () => {
-      for (let i = 0; i < workers.length; i++) {
-        if (busy[i] || queue.length === 0) continue;
-        const job = queue.shift();
-        busy[i] = true;
-        const w = workers[i];
-        const onMsg = (e) => {
-          if (e.data.id !== job.id) return;
-          w.removeEventListener('message', onMsg);
-          busy[i] = false;
-          if (e.data.error) job.reject(new Error(e.data.error));
-          else job.resolve(e.data.result);
-          dispatch();
-        };
-        w.addEventListener('message', onMsg);
-        w.postMessage({id: job.id, payload: job.payload});
-      }
-    };
-    return {
-      run(payload) {
-        return new Promise((resolve, reject) => {
-          queue.push({id: nextId++, payload, resolve, reject});
-          dispatch();
-        });
-      },
-      size,
-    };
-  } catch (e) {
-    console.warn('Hand-Picker worker pool init failed, falling back to server:', e);
-    return null;
-  }
-})();
-
-async function _hpComputeEquity(payload) {
-  // Try worker pool first; fall back to /api/equity on any failure.
-  if (_hpWorkerPool) {
-    try {
-      return await _hpWorkerPool.run(payload);
-    } catch (e) {
-      console.warn('Worker MC failed, falling back to /api/equity:', e);
-    }
-  }
-  const res = await fetch('/api/equity', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `Server returned ${res.status}`);
-  }
-  return await res.json();
-}
-
-function hpRefresh() {
-  const emptyEl = document.getElementById('eqHpEmpty');
-  const controlsEl = document.getElementById('eqHpControls');
-  const listEl = document.getElementById('eqHpList');
-  const actionEl = document.getElementById('eqHpActionRow');
-  const history = (typeof _statsData !== 'undefined' && _statsData && _statsData.handHistory) || {};
-  const players = Object.keys(history);
-  if (!players.length) {
-    emptyEl.style.display = '';
-    controlsEl.style.display = 'none';
-    listEl.style.display = 'none';
-    actionEl.style.display = 'none';
-    document.getElementById('eqHpResults').style.display = 'none';
-    return;
-  }
-  emptyEl.style.display = 'none';
-  controlsEl.style.display = 'flex';
-  listEl.style.display = '';
-  actionEl.style.display = 'flex';
-  players.sort((a, b) => a.localeCompare(b));
-  const sel = document.getElementById('eqHpPlayer');
-  const prev = sel.value;
-  sel.innerHTML = players.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
-  if (prev && players.includes(prev)) sel.value = prev;
-  sel.onchange = hpRender;
-  hpRender();
-}
-
-function hpRender() {
-  const sel = document.getElementById('eqHpPlayer');
-  const player = sel.value;
-  const listEl = document.getElementById('eqHpList');
-  const countEl = document.getElementById('eqHpCount');
-  const history = (typeof _statsData !== 'undefined' && _statsData && _statsData.handHistory) || {};
-  const hands = (history[player] || []).slice();
-
-  // Partition: small-loss (-10 <= delta <= 0) goes to bottom; others on top. Sort each by potSize desc.
-  const active = [];
-  const smallLoss = [];
-  for (const h of hands) {
-    if (h.delta > 0 || h.delta < -10) active.push(h);
-    else smallLoss.push(h);
-  }
-  const byPotDesc = (a, b) => (b.potSize || 0) - (a.potSize || 0);
-  active.sort(byPotDesc);
-  smallLoss.sort(byPotDesc);
-  const ordered = active.concat(smallLoss);
-
-  countEl.textContent = ordered.length
-    ? `${ordered.length} hand${ordered.length === 1 ? '' : 's'}${smallLoss.length ? ` (${smallLoss.length} small-loss at bottom)` : ''}`
-    : '';
-
-  // Reset selection whenever list re-renders.
-  _hpSelected = null;
-  document.getElementById('eqHpCalcBtn').disabled = true;
-  document.getElementById('eqHpCalcHint').textContent = '';
-  document.getElementById('eqHpResults').style.display = 'none';
-
-  if (!ordered.length) {
-    listEl.innerHTML = '<div style="padding:0.75rem;color:var(--text-muted);font-size:0.85rem;">No hands recorded for this player.</div>';
-    return;
-  }
-
-  const gridCols = '7rem 4rem 1fr 1fr 5rem 5rem';
-  const header = `<div style="display:grid;grid-template-columns:${gridCols};gap:0.5rem;padding:0.45rem 0.6rem;border-bottom:1px solid var(--border-default);font-size:0.7rem;color:var(--text-tertiary);letter-spacing:0.06em;font-weight:700;background:rgba(255,255,255,0.02);position:sticky;top:0;">
-    <span>EQUITY</span>
-    <span>HAND</span><span>HOLE</span><span>BOARD</span>
-    <span style="text-align:right;">POT</span>
-    <span style="text-align:right;">${esc(player)} NET</span>
-  </div>`;
-
-  const rowsHtml = ordered.map(h => {
-    const isSmall = (h.delta > -10 && h.delta <= 0);
-    const selectable = !!h.allinSnapshot;
-    const dim = isSmall ? 'opacity:0.55;' : '';
-    const cursor = selectable ? 'cursor:pointer;' : 'cursor:not-allowed;';
-    const title = selectable
-      ? `Select hand #${h.hand} (${h.allinSnapshot.street} all-in)`
-      : 'No pre-river all-in for this player in this hand';
-    const cardsHtml = (h.cards && h.cards.length) ? _cards(h.cards) : '<span style="color:var(--text-muted);">—</span>';
-    const boardHtml = (h.board1 && h.board1.length) ? _cards(h.board1) : '<span style="color:var(--text-muted);">—</span>';
-    const pot = (h.potSize != null) ? `$${(+h.potSize).toFixed(2)}` : '—';
-    const deltaCol = h.delta > 0 ? '#22c55e' : (h.delta < 0 ? '#ef4444' : 'var(--text-secondary)');
-    const deltaStr = `${h.delta >= 0 ? '+' : ''}$${(+h.delta).toFixed(2)}`;
-    const statusBadge = selectable
-      ? `<span style="display:inline-flex;align-items:center;gap:0.25rem;padding:0.15rem 0.5rem;border-radius:10px;background:rgba(34,197,94,0.15);color:#22c55e;font-size:0.65rem;font-weight:700;letter-spacing:0.04em;border:1px solid rgba(34,197,94,0.3);">● ${esc(h.allinSnapshot.street.toUpperCase())}</span>`
-      : `<span style="display:inline-flex;align-items:center;gap:0.25rem;padding:0.15rem 0.5rem;border-radius:10px;background:rgba(148,163,184,0.1);color:var(--text-muted);font-size:0.65rem;font-weight:700;letter-spacing:0.04em;border:1px solid var(--border-subtle);">○ N/A</span>`;
-    return `<div class="eq-hp-row" data-hand="${esc(h.hand)}" ${selectable ? 'tabindex="0"' : ''} style="${dim}${cursor}display:grid;grid-template-columns:${gridCols};gap:0.5rem;align-items:center;padding:0.45rem 0.6rem;border-bottom:1px solid var(--border-subtle);font-size:0.8rem;" title="${esc(title)}">
-      <span>${statusBadge}</span>
-      <span style="color:var(--text-tertiary);font-family:'JetBrains Mono',monospace;">#${esc(h.hand)}</span>
-      <span>${cardsHtml}</span>
-      <span>${boardHtml}</span>
-      <span style="text-align:right;font-family:'JetBrains Mono',monospace;">${pot}</span>
-      <span style="text-align:right;font-family:'JetBrains Mono',monospace;color:${deltaCol};">${deltaStr}</span>
-    </div>`;
-  }).join('');
-
-  listEl.innerHTML = header + rowsHtml;
-
-  listEl.querySelectorAll('.eq-hp-row').forEach(row => {
-    const handNum = row.getAttribute('data-hand');
-    const hand = ordered.find(h => String(h.hand) === handNum);
-    if (!hand || !hand.allinSnapshot) return;
-    row.addEventListener('click', () => hpSelect(hand, row));
-  });
-}
-
-function hpSelect(hand, rowEl) {
-  _hpSelected = hand;
-  document.querySelectorAll('.eq-hp-row').forEach(r => { r.style.background = ''; });
-  rowEl.style.background = 'rgba(52,211,153,0.1)';
-  const snap = hand.allinSnapshot;
-  const btn = document.getElementById('eqHpCalcBtn');
-  const hint = document.getElementById('eqHpCalcHint');
-  btn.disabled = false;
-  const nPl = snap.players.length;
-  const boardStr = (snap.board && snap.board.length) ? ` · board ${snap.board.join(' ')}` : '';
-  hint.textContent = `Street: ${snap.street} · ${nPl} player${nPl === 1 ? '' : 's'} w/ known cards${boardStr}`;
-  document.getElementById('eqHpResults').style.display = 'none';
-}
-
-async function hpCalculate() {
-  if (!_hpSelected || !_hpSelected.allinSnapshot) return;
-  const snap = _hpSelected.allinSnapshot;
-  const btn = document.getElementById('eqHpCalcBtn');
-  const spinner = document.getElementById('eqHpSpinner');
-  const resultsEl = document.getElementById('eqHpResults');
-  btn.disabled = true;
-  spinner.style.display = 'inline';
-  try {
-    const payload = {
-      hands: snap.players.map(p => p.cards),
-      board: snap.board || [],
-      board2: snap.board2 || [],
-      committed: snap.players.map(p => +p.committed || 0),
-      dead_money: +snap.deadMoney || 0,
-      trials: 2500,
-    };
-    const data = await _hpComputeEquity(payload);
-    hpRenderResults(snap, data);
-  } catch (e) {
-    resultsEl.style.display = 'block';
-    document.getElementById('eqHpResultsInfo').innerHTML = '';
-    document.getElementById('eqHpResultBar').innerHTML = '';
-    document.getElementById('eqHpTable').innerHTML = '';
-    document.getElementById('eqHpResultLabels').innerHTML = `<span class="error">${esc(e.message)}</span>`;
-  }
-  spinner.style.display = 'none';
-  btn.disabled = false;
-}
-
-function _hpCard(card) {
-  if (!card) return '<span class="hp-card placeholder">·</span>';
-  const rank = card[0] === 'T' ? '10' : card[0];
-  const suitChar = {s:'♠', h:'♥', d:'♦', c:'♣'}[card[1]] || card[1];
-  return `<span class="hp-card suit-${card[1]}">${rank}${suitChar}</span>`;
-}
-
-function _hpCards(arr) {
-  if (!arr || !arr.length) return '';
-  return arr.map(_hpCard).join('');
-}
-
-function hpRenderTable(snap, data) {
-  const equities = data.equities || [];
-  const isDouble = data.mode === 'double';
-  const filterPlayer = (document.getElementById('eqHpPlayer') || {}).value;
-
-  const seats = snap.players.map((p, i) => {
-    const eq = equities[i];
-    const equityStr = eq ? `${eq.equity.toFixed(1)}%` : '';
-    const isYou = p.name === filterPlayer;
-    return `<div class="hp-seat${isYou ? ' you' : ''}">
-      <div class="hp-seat-name" style="color:${EQ_PLAYER_COLORS[i % EQ_PLAYER_COLORS.length]};">${esc(p.name)}${isYou ? ' (you)' : ''}</div>
-      <div class="hp-seat-cards">${_hpCards(p.cards)}</div>
-      <div class="hp-seat-equity">${equityStr}</div>
-    </div>`;
-  }).join('');
-
-  const padBoard = (cards) => {
-    const filled = (cards || []).slice();
-    while (filled.length < 5) filled.push(null);
-    return filled.map(_hpCard).join('');
-  };
-
-  const board1Html = `<div class="hp-board-row">
-    <div class="hp-board-label">${isDouble ? 'BOARD 1' : 'BOARD'}</div>
-    <div class="hp-board-cards">${padBoard(snap.board)}</div>
-  </div>`;
-  const board2Html = isDouble ? `<div class="hp-board-row">
-    <div class="hp-board-label">BOARD 2</div>
-    <div class="hp-board-cards">${padBoard(snap.board2)}</div>
-  </div>` : '';
-
-  document.getElementById('eqHpTable').innerHTML = `<div class="hp-table">
-    <div class="hp-table-players">${seats}</div>
-    ${board1Html}
-    ${board2Html}
-  </div>`;
-}
-
-function hpRenderResults(snap, data) {
-  const resultsEl = document.getElementById('eqHpResults');
-  resultsEl.style.display = 'block';
-  const trials = data.trials || 2500;
-  const pot = +(snap.pot || 0);
-  const isDouble = data.mode === 'double';
-  const doubleStr = isDouble ? ' · Double board' : '';
-  document.getElementById('eqHpResultsInfo').innerHTML =
-    `Hand #${esc(_hpSelected.hand)} · ${esc(snap.street)} all-in · ${trials.toLocaleString()} trials · Pot <strong style="color:var(--text-primary);">$${pot.toFixed(2)}</strong>${doubleStr}`;
-
-  hpRenderTable(snap, data);
-
-  const equities = data.equities || [];
-  const labels = document.getElementById('eqHpResultLabels');
-  const bar = document.getElementById('eqHpResultBar');
-
-  if (isDouble) {
-    // Header row: only player name + overall % (board-level numbers shown in table below).
-    labels.innerHTML = equities.map((eq, i) => {
-      const color = EQ_PLAYER_COLORS[i % EQ_PLAYER_COLORS.length];
-      const name = snap.players[i] ? snap.players[i].name : `P${i + 1}`;
-      return `<span class="eq-result-label" style="color:${color}">${esc(name)}: ${eq.equity.toFixed(1)}%</span>`;
-    }).join('');
-    // Three stacked bars: B1, B2, Overall.
-    const buildBar = (key, label) => {
-      const segs = equities.map((eq, i) => {
-        const color = EQ_PLAYER_COLORS[i % EQ_PLAYER_COLORS.length];
-        const value = key === 'overall' ? eq.equity : (eq[key] && eq[key].equity) || 0;
-        return `<div style="width:${value}%;background:${color};"></div>`;
-      }).join('');
-      return `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem;">
-        <span style="color:var(--text-tertiary);font-size:0.7rem;font-weight:700;letter-spacing:0.06em;width:4.2rem;text-align:right;">${label}</span>
-        <div class="eq-result-bar" style="flex:1;margin:0;">${segs}</div>
-      </div>`;
-    };
-    bar.outerHTML = `<div id="eqHpResultBar">
-      ${buildBar('board1', 'BOARD 1')}
-      ${buildBar('board2', 'BOARD 2')}
-      ${buildBar('overall', 'OVERALL')}
-    </div>`;
-  } else {
-    labels.innerHTML = equities.map((eq, i) => {
-      const color = EQ_PLAYER_COLORS[i % EQ_PLAYER_COLORS.length];
-      const name = snap.players[i] ? snap.players[i].name : `P${i + 1}`;
-      return `<span class="eq-result-label" style="color:${color}">${esc(name)}: ${eq.equity.toFixed(1)}%</span>`;
-    }).join('');
-    bar.outerHTML = `<div class="eq-result-bar" id="eqHpResultBar">${equities.map((eq, i) => {
-      const color = EQ_PLAYER_COLORS[i % EQ_PLAYER_COLORS.length];
-      return `<div style="width:${eq.equity}%;background:${color};"></div>`;
-    }).join('')}</div>`;
-  }
-
-  // Per-player breakdown table.
-  let evHtml = '';
-  if (equities.length) {
-    if (isDouble) {
-      const rows = equities.map((eq, i) => {
-        const color = EQ_PLAYER_COLORS[i % EQ_PLAYER_COLORS.length];
-        const name = snap.players[i] ? snap.players[i].name : `P${i + 1}`;
-        const committed = (snap.players[i] && +snap.players[i].committed) || 0;
-        const grossPayout = (typeof eq.expected_payout === 'number') ? eq.expected_payout : (eq.equity / 100) * pot;
-        const expDollars = grossPayout - committed;
-        const cell = (b) => `${b.equity.toFixed(1)}% <span style="color:var(--text-muted);font-size:0.7rem;">(${b.wins}W/${b.ties}T/${b.losses}L)</span>`;
-        return `<tr>
-          <td style="padding:0.3rem 0.6rem;color:${color};font-weight:700;">${esc(name)}</td>
-          <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;">${cell(eq.board1)}</td>
-          <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;">${cell(eq.board2)}</td>
-          <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:var(--text-primary);font-weight:700;">${eq.equity.toFixed(1)}%</td>
-          <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:${expDollars >= 0 ? '#22c55e' : '#ef4444'};font-weight:700;">${expDollars >= 0 ? '+' : '-'}$${Math.abs(expDollars).toFixed(2)}</td>
-        </tr>`;
-      }).join('');
-      evHtml = `<table style="width:100%;margin-top:0.75rem;border-collapse:collapse;font-size:0.8rem;">
-        <thead><tr style="border-bottom:1px solid var(--border-default);color:var(--text-tertiary);font-size:0.7rem;letter-spacing:0.06em;">
-          <th style="padding:0.4rem 0.6rem;text-align:left;">PLAYER</th>
-          <th style="padding:0.4rem 0.6rem;text-align:right;">BOARD 1</th>
-          <th style="padding:0.4rem 0.6rem;text-align:right;">BOARD 2</th>
-          <th style="padding:0.4rem 0.6rem;text-align:right;">OVERALL</th>
-          <th style="padding:0.4rem 0.6rem;text-align:right;">EXPECTED $</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>`;
-    } else if (pot > 0) {
-      const rows = equities.map((eq, i) => {
-        const color = EQ_PLAYER_COLORS[i % EQ_PLAYER_COLORS.length];
-        const name = snap.players[i] ? snap.players[i].name : `P${i + 1}`;
-        const wins = eq.wins || 0;
-        const ties = eq.ties || 0;
-        const losses = trials - wins - ties;
-        const committed = (snap.players[i] && +snap.players[i].committed) || 0;
-        const grossPayout = (typeof eq.expected_payout === 'number') ? eq.expected_payout : (eq.equity / 100) * pot;
-        const expDollars = grossPayout - committed;
-        return `<tr>
-          <td style="padding:0.3rem 0.6rem;color:${color};font-weight:700;">${esc(name)}</td>
-          <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:#22c55e;">${wins.toLocaleString()}</td>
-          <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:#f59e0b;">${ties.toLocaleString()}</td>
-          <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:#ef4444;">${losses.toLocaleString()}</td>
-          <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:${expDollars >= 0 ? '#22c55e' : '#ef4444'};font-weight:700;">${expDollars >= 0 ? '+' : '-'}$${Math.abs(expDollars).toFixed(2)}</td>
-        </tr>`;
-      }).join('');
-      evHtml = `<table style="width:100%;margin-top:0.75rem;border-collapse:collapse;font-size:0.8rem;">
-        <thead><tr style="border-bottom:1px solid var(--border-default);color:var(--text-tertiary);font-size:0.7rem;letter-spacing:0.06em;">
-          <th style="padding:0.4rem 0.6rem;text-align:left;">PLAYER</th>
-          <th style="padding:0.4rem 0.6rem;text-align:right;">WINS</th>
-          <th style="padding:0.4rem 0.6rem;text-align:right;">CHOPS</th>
-          <th style="padding:0.4rem 0.6rem;text-align:right;">LOSSES</th>
-          <th style="padding:0.4rem 0.6rem;text-align:right;">EXPECTED $</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>`;
-    }
-  }
-  let evTable = document.getElementById('eqHpEvTable');
-  if (!evTable) {
-    evTable = document.createElement('div');
-    evTable.id = 'eqHpEvTable';
-    resultsEl.appendChild(evTable);
-  }
-  evTable.innerHTML = evHtml;
-}
-
-let _hpAllAbort = false;
-
-function hpStopAll() {
-  _hpAllAbort = true;
-}
-
-async function hpCalculateAll() {
-  const sel = document.getElementById('eqHpPlayer');
-  const player = sel.value;
-  if (!player) return;
-  const history = (typeof _statsData !== 'undefined' && _statsData && _statsData.handHistory) || {};
-  const all = history[player] || [];
-  const eligible = all.filter(h => {
-    if (!h.allinSnapshot) return false;
-    return (h.allinSnapshot.players || []).some(p => p.name === player);
-  });
-
-  const aggEl = document.getElementById('eqHpAggResults');
-  aggEl.style.display = 'block';
-
-  if (!eligible.length) {
-    aggEl.innerHTML = `<div style="color:var(--text-muted);font-size:0.85rem;">No all-in hands eligible for equity calculation for <strong>${esc(player)}</strong>.</div>`;
-    return;
-  }
-
-  const calcBtn = document.getElementById('eqHpCalcBtn');
-  const allBtn = document.getElementById('eqHpCalcAllBtn');
-  const stopBtn = document.getElementById('eqHpStopAllBtn');
-  calcBtn.disabled = true;
-  allBtn.disabled = true;
-  stopBtn.style.display = 'inline-block';
-  _hpAllAbort = false;
-
-  let sumExpected = 0;
-  let sumActual = 0;
-  let sumCommitted = 0;
-  let processed = 0;
-  const perHand = [];
-
-  const renderProgress = () => {
-    aggEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-tertiary);">
-      Running ${processed}/${eligible.length} hands for <strong style="color:var(--text-primary);">${esc(player)}</strong>… ${_hpAllAbort ? '<span style="color:#f59e0b;">stopping…</span>' : ''}
-    </div>`;
-  };
-  renderProgress();
-
-  const processHand = async (hand) => {
-    const snap = hand.allinSnapshot;
-    const playerIdx = snap.players.findIndex(p => p.name === player);
-    if (playerIdx < 0) return;
-    const committed = +snap.players[playerIdx].committed || 0;
-    const payload = {
-      hands: snap.players.map(p => p.cards),
-      board: snap.board || [],
-      board2: snap.board2 || [],
-      committed: snap.players.map(p => +p.committed || 0),
-      dead_money: +snap.deadMoney || 0,
-      trials: 2500,
-    };
-    try {
-      const data = await _hpComputeEquity(payload);
-      const eq = (data.equities || [])[playerIdx];
-      if (eq && typeof eq.expected_payout === 'number') {
-        const expectedNet = eq.expected_payout - committed;
-        sumExpected += expectedNet;
-        sumActual += +hand.delta || 0;
-        sumCommitted += committed;
-        perHand.push({
-          hand: hand.hand,
-          committed,
-          expected: expectedNet,
-          actual: +hand.delta || 0,
-          equity: eq.equity,
-          street: snap.street,
-          double: data.mode === 'double',
-        });
-      }
-    } catch (e) {
-      // Skip this hand on error; continue with the rest.
-    }
-  };
-
-  // Bounded concurrent runner — fires up to CONCURRENCY requests in flight at once
-  // to keep the server-side process pool fed.
-  const CONCURRENCY = 4;
-  let next = 0;
-  const workers = Array.from({length: Math.min(CONCURRENCY, eligible.length)}, async () => {
-    while (!_hpAllAbort) {
-      const i = next++;
-      if (i >= eligible.length) return;
-      await processHand(eligible[i]);
-      processed++;
-      renderProgress();
-    }
-  });
-  await Promise.all(workers);
-
-  stopBtn.style.display = 'none';
-  calcBtn.disabled = false;
-  allBtn.disabled = false;
-
-  const diff = sumActual - sumExpected;
-  const fmt = (v) => `${v >= 0 ? '+' : '-'}$${Math.abs(v).toFixed(2)}`;
-  const col = (v) => v >= 0 ? '#22c55e' : '#ef4444';
-
-  const rows = perHand.map(h => `<tr>
-    <td style="padding:0.3rem 0.6rem;font-family:'JetBrains Mono',monospace;color:var(--text-tertiary);">#${esc(h.hand)}</td>
-    <td style="padding:0.3rem 0.6rem;font-family:'JetBrains Mono',monospace;color:var(--text-secondary);">${esc(h.street)}${h.double ? ' · 2B' : ''}</td>
-    <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:var(--text-secondary);">$${h.committed.toFixed(2)}</td>
-    <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:var(--text-secondary);">${h.equity.toFixed(1)}%</td>
-    <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:${col(h.expected)};">${fmt(h.expected)}</td>
-    <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:${col(h.actual)};">${fmt(h.actual)}</td>
-    <td style="padding:0.3rem 0.6rem;text-align:right;font-family:'JetBrains Mono',monospace;color:${col(h.actual - h.expected)};font-weight:700;">${fmt(h.actual - h.expected)}</td>
-  </tr>`).join('');
-
-  const stoppedNote = _hpAllAbort
-    ? `<div style="color:#f59e0b;font-size:0.8rem;margin-bottom:0.5rem;">Stopped after ${perHand.length}/${eligible.length} hands.</div>`
-    : '';
-
-  aggEl.innerHTML = `
-    ${stoppedNote}
-    <div style="display:flex;flex-wrap:wrap;gap:1.5rem;margin-bottom:0.75rem;font-size:0.85rem;">
-      <div><span style="color:var(--text-tertiary);font-size:0.7rem;letter-spacing:0.06em;font-weight:700;">PLAYER</span><br><strong style="color:var(--text-primary);">${esc(player)}</strong></div>
-      <div><span style="color:var(--text-tertiary);font-size:0.7rem;letter-spacing:0.06em;font-weight:700;">HANDS</span><br><strong style="color:var(--text-primary);">${perHand.length}</strong></div>
-      <div><span style="color:var(--text-tertiary);font-size:0.7rem;letter-spacing:0.06em;font-weight:700;">TOTAL COMMITTED</span><br><strong style="color:var(--text-primary);">$${sumCommitted.toFixed(2)}</strong></div>
-      <div><span style="color:var(--text-tertiary);font-size:0.7rem;letter-spacing:0.06em;font-weight:700;">EXPECTED EV</span><br><strong style="color:${col(sumExpected)};">${fmt(sumExpected)}</strong></div>
-      <div><span style="color:var(--text-tertiary);font-size:0.7rem;letter-spacing:0.06em;font-weight:700;">ACTUAL NET</span><br><strong style="color:${col(sumActual)};">${fmt(sumActual)}</strong></div>
-      <div><span style="color:var(--text-tertiary);font-size:0.7rem;letter-spacing:0.06em;font-weight:700;">EV DIFFERENTIAL</span><br><strong style="color:${col(diff)};">${fmt(diff)}</strong></div>
-    </div>
-    <table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
-      <thead><tr style="border-bottom:1px solid var(--border-default);color:var(--text-tertiary);font-size:0.7rem;letter-spacing:0.06em;">
-        <th style="padding:0.4rem 0.6rem;text-align:left;">HAND</th>
-        <th style="padding:0.4rem 0.6rem;text-align:left;">STREET</th>
-        <th style="padding:0.4rem 0.6rem;text-align:right;">COMMITTED</th>
-        <th style="padding:0.4rem 0.6rem;text-align:right;">EQUITY</th>
-        <th style="padding:0.4rem 0.6rem;text-align:right;">EXPECTED</th>
-        <th style="padding:0.4rem 0.6rem;text-align:right;">ACTUAL</th>
-        <th style="padding:0.4rem 0.6rem;text-align:right;">DIFF</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
-}
 
 // Load saved results on init
 eqRenderSaved();
-hpRefresh();
+
+// Auto-restore last upload from localStorage so refreshes don't lose stats/equity/replayer
+_restoreUploadFromCacheOnLoad();
+
+// Restore the last-active tab
+try {
+  const lastTab = localStorage.getItem('pn-active-tab');
+  if (lastTab && ['ledger','stats','equity'].includes(lastTab)) switchTab(lastTab);
+} catch (e) {}
 
 // Preset scenarios — each has multiple boards to pick from randomly
 const EQ_PRESETS = {

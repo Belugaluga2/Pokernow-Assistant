@@ -27,6 +27,7 @@ from csv_parser import parse_hand_data
 from stats_engine import (
     compute_all_stats, compute_winnings, compute_allin_ev,
     compute_equity, compute_equity_double_board, compute_river_outs, compute_hand_history, compute_biggest_pots, has_eval7,
+    extract_hand,
     prebuild_eval5_cache,
 )
 from equity_categories import list_valid_categories, generate_hands
@@ -532,6 +533,30 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                     self.wfile.flush()
                 except (BrokenPipeError, ConnectionResetError):
                     pass
+            return
+
+        # POST /api/hand?n=<number> — return one hand's enriched events for the replayer
+        hand_path = self.path.split('?')[0]
+        if hand_path == '/api/hand':
+            try:
+                qs = self.path.split('?', 1)[1] if '?' in self.path else ''
+                params = dict(p.split('=', 1) for p in qs.split('&') if '=' in p) if qs else {}
+                hand_n = params.get('n')
+                if not hand_n:
+                    self._json_response(400, {'error': 'Missing ?n=<hand_number>'})
+                    return
+                length = int(self.headers.get('Content-Length', 0))
+                body = self.rfile.read(length).decode('utf-8', errors='replace')
+                hands, fmt = parse_hand_data(body)
+                hand = extract_hand(hands, hand_n)
+                if not hand:
+                    self._json_response(404, {'error': f'Hand #{hand_n} not found'})
+                    return
+                self._json_response(200, {'hand': hand})
+            except Exception as e:
+                print(f'  ERROR /api/hand: {e}')
+                import traceback; traceback.print_exc()
+                self._json_response(400, {'error': str(e)})
             return
 
         # POST /api/equity — equity calculator

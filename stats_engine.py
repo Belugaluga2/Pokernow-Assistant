@@ -1383,6 +1383,99 @@ def compute_hand_history(hands):
     return dict(history)
 
 
+_EVENT_KIND = {
+    ANTE: 'ante', BIG_BLIND: 'bb', SMALL_BLIND: 'sb',
+    POSTED_BB: 'post_bb', POSTED_SB_DEAD: 'post_sb_dead',
+    CALL: 'call', BET_RAISE: 'bet_raise', COMMUNITY: 'community',
+    PAYOUT: 'payout', FOLD: 'fold', SHOW_MUCK: 'show_muck',
+    ALLIN_APPROVAL: 'allin_approval', END_OF_HAND: 'end',
+    REFUND: 'refund', BOUNTIES: 'bounty', SEVEN_DEUCE_BOUNTY: 'seven_deuce',
+}
+
+
+def _humanize_event(payload, seat_to_name):
+    """Build a short text description for an event (for the replayer UI)."""
+    t = payload.get('type')
+    seat = payload.get('seat')
+    name = seat_to_name.get(seat, '') if seat is not None else ''
+    val = payload.get('value')
+    cards = payload.get('cards') or []
+    allin = ' (all-in)' if payload.get('allIn') else ''
+    if t == ANTE: return f'{name} antes ${val}'
+    if t == SMALL_BLIND: return f'{name} posts SB ${val}'
+    if t == BIG_BLIND: return f'{name} posts BB ${val}'
+    if t == POSTED_BB: return f'{name} posts BB (dead) ${val}'
+    if t == POSTED_SB_DEAD: return f'{name} posts SB (dead) ${val}'
+    if t == CALL: return f'{name} calls ${val}{allin}'
+    if t == BET_RAISE: return f'{name} bets/raises to ${val}{allin}'
+    if t == COMMUNITY:
+        b = payload.get('board') or payload.get('run', 1)
+        suffix = ' (board 2)' if b == 2 else ''
+        return f'Board{suffix}: {" ".join(cards)}'
+    if t == PAYOUT: return f'{name} wins ${val}'
+    if t == FOLD: return f'{name} folds'
+    if t == SHOW_MUCK: return f'{name} shows {" ".join(cards)}' if cards else f'{name} mucks'
+    if t == ALLIN_APPROVAL: return 'All-in approved — running the board'
+    if t == END_OF_HAND: return 'Hand complete'
+    if t == REFUND: return f'{name} refunded ${val}'
+    if t == BOUNTIES: return f'{name} bounty ${val}'
+    if t == SEVEN_DEUCE_BOUNTY: return f'{name} 7-2 bounty ${val}'
+    return f'event {t}'
+
+
+def extract_hand(hands, hand_number):
+    """Return one hand's full record (events enriched with kind+text) by hand number, or None."""
+    target = str(hand_number)
+    for hand in hands:
+        if str(hand.get('number')) != target:
+            continue
+        seat_to_name = {p['seat']: p['name'] for p in hand.get('players', [])}
+        scale = 0.01 if hand.get('cents') else 1.0
+        enriched = []
+        for ev in hand.get('events', []):
+            payload = ev.get('payload', {})
+            t = payload.get('type')
+            scaled_val = None
+            if payload.get('value') is not None:
+                try:
+                    scaled_val = round(float(payload['value']) * scale, 2)
+                except (TypeError, ValueError):
+                    scaled_val = payload.get('value')
+            display_payload = dict(payload)
+            if scaled_val is not None:
+                display_payload['value'] = scaled_val
+            enriched.append({
+                'kind': _EVENT_KIND.get(t, 'unknown'),
+                'type': t,
+                'seat': payload.get('seat'),
+                'name': seat_to_name.get(payload.get('seat'), '') if payload.get('seat') is not None else '',
+                'value': scaled_val,
+                'cards': payload.get('cards') or [],
+                'board': payload.get('board') or payload.get('run'),
+                'allIn': bool(payload.get('allIn')),
+                'text': _humanize_event(display_payload, seat_to_name),
+            })
+        # Players with starting stacks (scaled)
+        players = []
+        for p in hand.get('players', []):
+            pp = dict(p)
+            if 'stack' in pp and pp['stack'] is not None:
+                try:
+                    pp['stack'] = round(float(pp['stack']) * scale, 2)
+                except (TypeError, ValueError):
+                    pass
+            players.append(pp)
+        return {
+            'number': hand.get('number'),
+            'gameType': hand.get('gameType', ''),
+            'bombPot': bool(hand.get('bombPot')),
+            'players': players,
+            'events': enriched,
+            'holeCards': _collect_hole_cards(hand),
+        }
+    return None
+
+
 def _build_allin_snapshot(hand, hole_cards, scale):
     """Snapshot of the all-in lock point for equity replay.
 
