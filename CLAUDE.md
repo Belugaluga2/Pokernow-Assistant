@@ -12,8 +12,9 @@ A web app that generates ledgers and statistics from PokerNow.com poker games. U
 - Python HTTP server (stdlib `http.server`)
 - Serves static frontend (`index.html`)
 - API endpoints for ledger, stats, and EV computation
-- Uses Socket.IO to get live game state (player stacks) from PokerNow
-- Uses `curl` subprocess (with `requests` library fallback) to fetch PokerNow log API
+- Ledger comes from PokerNow's one-shot `players_sessions` endpoint; the log API + Socket.IO path is only a fallback
+- All HTTP to PokerNow goes through `PokerNowSession` (curl_cffi Chrome impersonation → `curl` subprocess → `requests`) and `fetch_json`, which classifies Cloudflare challenges, 429s and bad bodies into `PokerNowBlocked`
+- `POST /api/ledger/import` accepts a pasted `players_sessions` JSON or a downloaded ledger CSV when the server itself is blocked
 - Runs on `PORT` env variable (default 8000)
 
 ### Frontend: `index.html`
@@ -38,10 +39,16 @@ A web app that generates ledgers and statistics from PokerNow.com poker games. U
 ## Key API Endpoints
 
 ### `GET /api/ledger/{gameId}`
-Fast ledger generation (~6 seconds):
-1. Connects via Socket.IO to get current player stacks instantly
-2. Fetches money-only messages (`mm=true` filter, ~3 pages) for buy-ins/cash-outs
-3. Computes net profit and optimal settlements
+1. Primary: one request to `https://www.pokernow.com/games/{gameId}/players_sessions` → `ledger_from_players_sessions` (~1 second)
+2. Fallback (only for non-Cloudflare failures): Socket.IO stacks + money-only log crawl (`mm=true`) → `compute_ledger`
+3. Both paths share `compute_settlements` (greedy debtor/creditor matching)
+
+Responses: `200 {players, settlements, source: 'players_sessions'|'logs', totals?}`;
+`503 {error: 'cloudflare_blocked'|'rate_limited', message, ledgerUrl, gameId}` when PokerNow blocks the server;
+`502 {error: 'fetch_failed', message, ledgerUrl, gameId}` otherwise. The frontend shows the "Import ledger manually" card on any failure.
+
+### `POST /api/ledger/import`
+Raw text body: either the `players_sessions` JSON (user opens `ledgerUrl` in their own browser and pastes it) or PokerNow's "Download Ledger" CSV (header-driven, sessions summed per player). Auto-detected by `parse_ledger_import`. Returns the same ledger shape with `source: 'import_json'|'import_csv'`, or `400 {error: 'parse_failed', message}`.
 
 ### `POST /api/stats/upload` (or `/api/stats/csv`)
 Upload CSV/JSON file for statistics. Returns all stats except EV (which is on-demand).
@@ -54,11 +61,24 @@ Equity calculator for arbitrary hands vs board.
 
 ## PokerNow Data Access
 
-### Log API
+### Ledger endpoint (`players_sessions`) — primary ledger source
+- `GET https://www.pokernow.com/games/{gameId}/players_sessions` — PokerNow's own ledger in one request. Content-Type says `text/html` but the body is JSON (ignore the header).
+- Shape: `{buyInTotal, buyOutTotal, inGameTotal, nitEscrowTotal, gameHasRake, playersInfos: {pid: {names: [...], id, buyInSum, buyOutSum, inGame, nitEscrow, net}}}`
+- `names` is a list of every nickname the player used (may repeat) — use the last one
+- `net = buyOutSum + inGame + nitEscrow - buyInSum`. Nets do not sum to zero mid-hand (chips in the pot), so no zero-sum correction is applied
+- Amounts are in the same units as the log messages and as PokerNow's Ledger view; they are passed through as-is (the `_dollars()` no-decimal → ÷100 heuristic applies to the log path only)
+- No login required; works from a residential IP with any User-Agent
+
+### Cloudflare / datacenter IPs
+- PokerNow is behind Cloudflare, which challenges datacenter IPs (Render) with 403/503 — from a home IP the same requests pass even with a `python-requests` UA, so the block is IP reputation, not fingerprint. curl_cffi impersonation on the server is best-effort only
+- PokerNow sends no `Access-Control-Allow-Origin`, so the app page cannot fetch PokerNow from the user's browser; the manual import (open `players_sessions` in a tab, paste the JSON) is the guaranteed path
+- `_is_cloudflare_challenge` checks status 403/503 plus `cf-mitigated: challenge` or "Just a moment"/"challenge-platform"/"cf-chl" in the body
+- Dev flag `PN_SIMULATE_CLOUDFLARE=1` makes every PokerNow fetch raise the Cloudflare error, to exercise the fallback UI locally
+
+### Log API (fallback only)
 - `GET https://www.pokernow.com/games/{gameId}/log` — paginated log (50 entries/page)
 - `?mm=true` — money messages only (joins, quits, admin stack changes) — typically ~3 pages
 - `?before_at={created_at}` — pagination cursor
-- Cloudflare blocks Python `urllib` — must use `curl` subprocess or `requests` with browser User-Agent
 
 ### Socket.IO (for live game state)
 1. `GET https://www.pokernow.com/games/{gameId}` to get session cookies
@@ -71,9 +91,10 @@ Equity calculator for arbitrary hands vs board.
 - `GET https://www.pokernow.com/api/games/{gameId}/log_v3?hand_number={N}` — returns all entries for a specific hand
 
 ### Rate Limiting
-- PokerNow rate-limits aggressively (429 errors)
+- PokerNow rate-limits aggressively (429 errors) — ~6 rapid requests is enough to trigger it
 - Use 0.5-1.2 second delays between requests
-- Retry with exponential backoff (2s, 4s) on 429
+- Retry with exponential backoff (2s, 4s, 8s) on 429, then surface `rate_limited`
+- The legacy log crawl needs ~1 page per 50 money messages; big games (300+ players) hit 429 before finishing, which is why `players_sessions` (one request) is the primary source
 
 ## Ledger Calculation
 
@@ -165,8 +186,9 @@ entry,at,order
 
 ### Common Issues
 - eval7 fails to build on Python 3.14 (needs Cython + C compiler) — pin to 3.11
-- Cloudflare blocks Python urllib — server falls back to `requests` library if `curl` not available
-- Socket.IO needs session cookies from game page before connecting
+- "HTTP 403/503 from PokerNow" on Render = Cloudflare challenging the datacenter IP. The API returns `cloudflare_blocked` and the UI shows the "Import ledger manually" card (open the ledger JSON link, paste it, or drop the ledger CSV)
+- Socket.IO needs session cookies from game page before connecting (bootstrapped through `PokerNowSession`)
+- Merges for an imported ledger persist under the URL in the input box; importing with no URL entered means merges won't persist across reloads
 
 ## Equity Explorer
 
@@ -221,6 +243,9 @@ Defined in `index.html` as `EQUITY_PRESETS`. Each preset has 10 empirically vali
 ### `test_stats_engine.py` (131 tests)
 Covers: derive_positions, compute_all_stats (VPIP, PFR, 3-bet, 4-bet, fold-to-3bet, fold-to-4bet, c-bet, steal, WTSD, donk bet, AF, bomb pot stats), compute_winnings, _compute_deltas, equity calculator, all-in EV, side pots.
 
+### `test_ledger_import.py`
+Covers: `ledger_from_players_sessions` (nets, latest nickname, empty players skipped), ledger CSV parsing (multi-session sums, BOM/reordered/extra columns, net-only exports), import auto-detection, shared `compute_settlements`, Cloudflare detection and `fetch_json` classification with a fake session (no network).
+
 ### `test_equity_categories.py` (136 tests)
 Covers: _wrap_target_ranks (all wrap types, distance checks, post-filter), _count_straight_outs, _gen_wrap (exact outs), _validate_hand_for_category, list_valid_categories, _blocker_cards_for_category, generate_hands (locked cards, outs_adjust), preset board validation (all 50 boards), made-hand generators, server blocker logic simulation, broad coverage across 8 diverse boards.
 
@@ -233,7 +258,8 @@ equity_categories.py        — PLO5 hand category engine (wraps, sets, draws, b
 csv_parser.py               — CSV and JSON log parser
 test_stats_engine.py        — Unit tests for stats engine (131 tests)
 test_equity_categories.py   — Unit tests for equity categories (136 tests)
-requirements.txt            — Python dependencies
+test_ledger_import.py       — Unit tests for players_sessions ledger, manual import, Cloudflare handling
+requirements.txt            — Python dependencies (includes curl_cffi for Chrome TLS impersonation)
 .python-version             — Pins Python 3.11 for Render
 ```
 

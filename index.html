@@ -121,6 +121,29 @@
   }
   .input-section input::placeholder { color: var(--text-muted); font-weight: 400; }
 
+  /* Manual ledger import (fallback when PokerNow blocks the server) */
+  .ledger-paste {
+    width: 100%;
+    padding: 0.8rem 1.1rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    outline: none;
+    resize: vertical;
+    transition: border-color var(--transition-base), box-shadow var(--transition-base);
+  }
+  .ledger-paste:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.08);
+  }
+  .ledger-paste::placeholder { color: var(--text-muted); }
+  .import-steps { color: var(--text-secondary); margin: 0 0 0.75rem 1.25rem; line-height: 1.6; font-size: 0.9rem; }
+  .import-steps a { color: var(--accent); }
+
   .btn {
     padding: 0.8rem 1.75rem;
     background: linear-gradient(135deg, var(--accent-dim) 0%, #059669 100%);
@@ -783,6 +806,10 @@
     box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1), 0 0 20px rgba(5, 150, 105, 0.04);
     background: #fff;
   }
+  [data-theme="light"] .ledger-paste:focus {
+    box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+    background: #fff;
+  }
 
   [data-theme="light"] tbody tr:nth-child(even) td { background: rgba(0, 0, 0, 0.02); }
   [data-theme="light"] tbody tr:nth-child(even):hover td { background: rgba(0, 0, 0, 0.04); }
@@ -935,6 +962,27 @@
         <h2>Game Summary</h2>
         <div class="game-info" id="gameInfo">
           <div class="stat"><span class="stat-label">Status</span><span class="stat-value" style="color:var(--text-tertiary)">Enter a game URL above</span></div>
+        </div>
+      </div>
+      <div class="card" id="ledgerFallbackCard" style="display:none">
+        <h2>Import ledger manually</h2>
+        <p id="ledgerFallbackMsg" style="color:var(--text-secondary);margin-bottom:0.75rem"></p>
+        <ol class="import-steps">
+          <li><a id="ledgerFallbackLink" href="#" target="_blank" rel="noopener">Open this game's ledger on PokerNow</a> (opens in a new tab).</li>
+          <li>Select all (Ctrl+A), copy, and paste it below. Or click <strong>Download Ledger</strong> in PokerNow's Ledger view and drop the CSV here.</li>
+        </ol>
+        <textarea id="ledgerPaste" class="ledger-paste" rows="6" spellcheck="false" placeholder='{"buyInTotal": ..., "playersInfos": { ... }}'></textarea>
+        <div style="display:flex;gap:0.5rem;margin:0.6rem 0 1rem;flex-wrap:wrap">
+          <button class="btn btn-sm" onclick="importLedgerFromPaste()">Import pasted ledger</button>
+          <button class="btn btn-sm btn-outline" onclick="document.getElementById('ledgerPaste').value=''">Clear</button>
+        </div>
+        <input type="file" accept=".csv,.json,.txt" id="ledgerFileUpload" onchange="uploadLedgerFile(this)" style="display:none" />
+        <div class="upload-zone" id="ledgerUploadZone"
+             ondragover="event.preventDefault(); this.classList.add('dragover')"
+             ondragleave="this.classList.remove('dragover')"
+             ondrop="handleLedgerDrop(event)">
+          <p>Drag &amp; drop the ledger CSV (or the JSON saved as a file), or click to choose</p>
+          <p class="hint">Downloaded from the Ledger view on PokerNow</p>
         </div>
       </div>
       <div class="card">
@@ -1205,6 +1253,9 @@ function hideStatus() {
 // ===== UPLOAD HANDLING =====
 document.getElementById('uploadZone').addEventListener('click', () => {
   document.getElementById('fileUpload').click();
+});
+document.getElementById('ledgerUploadZone').addEventListener('click', () => {
+  document.getElementById('ledgerFileUpload').click();
 });
 
 function handleDrop(e) {
@@ -2863,9 +2914,64 @@ function renderLedger(data) {
   applyMergesEverywhere();
 }
 
+// ===== MANUAL LEDGER IMPORT (fallback when PokerNow blocks the server) =====
+// PokerNow's Cloudflare challenges datacenter IPs (our host) but not the user's
+// browser, so the user can open the ledger JSON themselves and paste it here.
+function showLedgerFallback(gameId, message, ledgerUrl) {
+  const card = document.getElementById('ledgerFallbackCard');
+  document.getElementById('ledgerFallbackMsg').textContent = message || 'Could not fetch the ledger automatically.';
+  const url = ledgerUrl || (gameId ? `https://www.pokernow.com/games/${gameId}/players_sessions` : '');
+  document.getElementById('ledgerFallbackLink').href = url || '#';
+  card.style.display = '';
+}
+
+function hideLedgerFallback() {
+  document.getElementById('ledgerFallbackCard').style.display = 'none';
+}
+
+async function importLedgerText(text, label) {
+  const zone = document.getElementById('ledgerUploadZone');
+  showStatus('Importing ledger' + (label ? ' from ' + label : '') + '...', false);
+  try {
+    const res = await fetch('/api/ledger/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: text,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || data.error || `Server returned ${res.status}`);
+    renderLedger(data);
+    hideStatus();
+    hideLedgerFallback();
+    switchTab('ledger');
+  } catch (err) {
+    showStatus('Import failed: ' + err.message, true);
+    if (zone) zone.innerHTML = '<p class="error">Error: ' + esc(err.message) + '</p><p class="hint">Check the file and try again</p>';
+  }
+}
+
+function importLedgerFromPaste() {
+  const text = document.getElementById('ledgerPaste').value;
+  if (text.trim()) importLedgerText(text, 'pasted text');
+  else showStatus('Paste the ledger JSON or CSV first.', true);
+}
+
+function handleLedgerDrop(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) file.text().then(t => importLedgerText(t, file.name));
+}
+
+function uploadLedgerFile(input) {
+  const file = input.files[0];
+  if (file) file.text().then(t => importLedgerText(t, file.name));
+  input.value = '';
+}
+
 async function analyze() {
   const input = document.getElementById('gameUrl').value;
-  const m = input.trim().match(/pokernow\.com\/games\/([a-zA-Z0-9_-]+)/);
+  const m = input.trim().match(/pokernow\.(?:com|club)\/games\/([a-zA-Z0-9_-]+)/);
   const gameId = m ? m[1] : (/^[a-zA-Z0-9_-]+$/.test(input.trim()) ? input.trim() : null);
 
   if (!gameId) {
@@ -2877,18 +2983,32 @@ async function analyze() {
   btn.disabled = true;
   showStatus('Fetching ledger...', false, true);
 
-  // 1) Fetch ledger (money-only logs — fast)
+  // 1) Fetch ledger (one players_sessions request server-side)
   try {
     const res = await fetch(`/api/ledger/${gameId}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `Server returned ${res.status}`);
+      const e = new Error(err.message || err.error || `Server returned ${res.status}`);
+      e.code = err.error;
+      e.ledgerUrl = err.ledgerUrl;
+      throw e;
     }
+    hideLedgerFallback();
     renderLedger(await res.json());
     hideStatus();
     switchTab('ledger');
   } catch (err) {
     showStatus(err.message, true);
+    let friendly;
+    if (err.code === 'cloudflare_blocked') {
+      friendly = 'PokerNow is blocking our server (Cloudflare), but your browser can still reach it. Import the ledger yourself below.';
+    } else if (err.code === 'rate_limited') {
+      friendly = 'PokerNow rate-limited our server. Wait a minute and retry, or import the ledger yourself below.';
+    } else {
+      friendly = 'Could not fetch the ledger automatically (' + err.message + '). Import it yourself below.';
+    }
+    showLedgerFallback(gameId, friendly, err.ledgerUrl);
+    switchTab('ledger');
   }
   btn.disabled = false;
 

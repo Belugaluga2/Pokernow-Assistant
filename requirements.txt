@@ -1,5 +1,6 @@
 python-socketio[client]
 websocket-client
 requests
+curl_cffi
 simple-websocket
 eval7

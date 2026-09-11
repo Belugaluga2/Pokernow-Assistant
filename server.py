@@ -17,11 +17,18 @@ import subprocess
 import threading
 import time
 
+import csv
+import io
 import requests as req_lib
 import socketio
 
 import os
 from concurrent.futures import ProcessPoolExecutor
+
+try:
+    from curl_cffi import requests as cf_requests  # Chrome TLS/HTTP2 impersonation
+except ImportError:  # pragma: no cover
+    cf_requests = None
 
 from csv_parser import parse_hand_data
 from stats_engine import (
@@ -51,60 +58,154 @@ def _worker_init():
 PORT = int(os.environ.get('PORT', 8000))
 CURL = shutil.which('curl') or shutil.which('curl.exe') or 'curl'
 DELAY = 0.5
+BROWSER_UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+              '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36')
+GAME_URL = 'https://www.pokernow.com/games/{game_id}'
+LEDGER_URL = 'https://www.pokernow.com/games/{game_id}/players_sessions'
 
 
-def curl_fetch(url, retries=3):
-    """Fetch a URL with retry/backoff for rate limits.
-    Tries curl first (bypasses Cloudflare TLS fingerprinting), falls back to requests."""
-    for attempt in range(retries):
-        # Try curl if available
+# ===== HTTP TO POKERNOW =====
+#
+# PokerNow sits behind Cloudflare, which challenges datacenter IPs (e.g. Render).
+# From a residential IP everything passes, even with a python-requests UA, so
+# server-side impersonation is best-effort only. Every failure is classified so
+# the frontend can offer the manual import fallback instead of a raw "HTTP 403".
+
+class PokerNowBlocked(Exception):
+    """Raised when PokerNow refuses to serve data.
+    kind: 'cloudflare' | 'rate_limited' | 'http' | 'bad_json' | 'network'"""
+
+    def __init__(self, kind, message, status=None):
+        super().__init__(message)
+        self.kind = kind
+        self.status = status
+
+
+_CF_BODY_TOKENS = ('Just a moment', 'challenge-platform', 'cf-chl', 'cf_chl_opt', '_cf_chl_tk')
+
+
+def _is_cloudflare_challenge(status, headers, body):
+    """True when the response is a Cloudflare interstitial rather than PokerNow's own answer."""
+    if status not in (403, 503):
+        return False
+    lowered = {str(k).lower(): str(v) for k, v in (headers or {}).items()}
+    if 'challenge' in lowered.get('cf-mitigated', '').lower():
+        return True
+    head = (body or '')[:4000]
+    return any(tok in head for tok in _CF_BODY_TOKENS)
+
+
+class PokerNowSession:
+    """One HTTP session per API request, with a shared cookie jar.
+
+    get() tries curl_cffi (Chrome TLS impersonation) -> curl subprocess -> requests.
+    A layer only falls through on a *transport* failure; HTTP error statuses are
+    returned as-is so fetch_json() can classify them (previously a 403 from curl
+    silently fell into a requests retry loop)."""
+
+    def __init__(self):
+        self._cf = None
+        if cf_requests is not None:
+            try:
+                self._cf = cf_requests.Session(impersonate='chrome')
+            except Exception as e:  # pragma: no cover
+                print(f'  curl_cffi unavailable ({e}); using curl/requests')
+        self._req = req_lib.Session()
+        self._req.headers['User-Agent'] = BROWSER_UA
+        self._cookies = {}
+
+    def _remember(self, cookies):
         try:
-            result = subprocess.run(
-                [CURL, '-s', '-w', '\n%{http_code}', '--max-time', '15', url],
-                capture_output=True, timeout=20,
-            )
-            output = result.stdout.decode('utf-8', errors='replace')
-            lines = output.rsplit('\n', 1)
-            body = lines[0] if len(lines) > 1 else output
-            status = int(lines[1]) if len(lines) > 1 else 0
+            self._cookies.update({str(k): str(v) for k, v in dict(cookies).items()})
+        except Exception:
+            pass
 
-            if status == 200:
-                return json.loads(body)
-            if status == 429 and attempt < retries - 1:
-                wait = 2 ** attempt
-                print(f'  Rate limited (429). Waiting {wait}s...')
-                time.sleep(wait)
-                continue
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass  # curl not available, fall back to requests
+    def cookie_header(self):
+        return '; '.join(f'{k}={v}' for k, v in self._cookies.items())
 
-        # Fallback: use requests library
+    def get(self, url, timeout=15):
+        """Returns (status, headers, text). Raises PokerNowBlocked('network') if every layer fails."""
+        errors = []
+        if self._cf is not None:
+            try:
+                resp = self._cf.get(url, timeout=timeout)
+                self._remember(resp.cookies)
+                return resp.status_code, dict(resp.headers), resp.text
+            except Exception as e:
+                errors.append(f'curl_cffi: {e}')
         try:
-            resp = req_lib.get(url, timeout=15, headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            })
-            if resp.status_code == 200:
-                return resp.json()
-            if resp.status_code == 429 and attempt < retries - 1:
-                wait = 2 ** attempt
-                print(f'  Rate limited (429). Waiting {wait}s...')
-                time.sleep(wait)
-                continue
-            if attempt < retries - 1:
-                time.sleep(1)
-                continue
-            raise Exception(f'HTTP {resp.status_code} from PokerNow')
+            return self._curl_get(url, timeout)
+        except (FileNotFoundError, OSError, subprocess.TimeoutExpired, ValueError) as e:
+            errors.append(f'curl: {e}')
+        try:
+            resp = self._req.get(url, timeout=timeout)
+            self._remember(resp.cookies.get_dict())
+            return resp.status_code, dict(resp.headers), resp.text
         except req_lib.RequestException as e:
+            errors.append(f'requests: {e}')
+        raise PokerNowBlocked('network', 'Request failed: ' + '; '.join(errors))
+
+    def _curl_get(self, url, timeout):
+        cmd = [CURL, '-s', '-D', '-', '-A', BROWSER_UA, '--max-time', str(timeout), '-w', '\n%{http_code}']
+        if self._cookies:
+            cmd += ['-b', self.cookie_header()]
+        cmd.append(url)
+        result = subprocess.run(cmd, capture_output=True, timeout=timeout + 5)
+        output = result.stdout.decode('utf-8', errors='replace')
+        payload, _, code = output.rpartition('\n')
+        status = int(code.strip() or 0)
+        if status == 0:
+            raise ValueError(f'curl exit {result.returncode}')
+        head, sep, body = payload.partition('\r\n\r\n')
+        if not sep:
+            head, sep, body = payload.partition('\n\n')
+        headers = {}
+        for line in head.splitlines()[1:]:
+            if ':' not in line:
+                continue
+            k, v = line.split(':', 1)
+            k, v = k.strip().lower(), v.strip()
+            headers[k] = v
+            if k == 'set-cookie' and '=' in v:
+                name, val = v.split(';', 1)[0].split('=', 1)
+                self._cookies[name.strip()] = val.strip()
+        return status, headers, body
+
+
+def fetch_json(session, url, retries=4):
+    """GET a PokerNow JSON endpoint with 429 backoff (2s, 4s, 8s) and Cloudflare detection.
+    Content-Type is ignored on purpose: players_sessions says text/html but is JSON."""
+    if os.environ.get('PN_SIMULATE_CLOUDFLARE') == '1':
+        raise PokerNowBlocked('cloudflare', 'Simulated Cloudflare challenge (PN_SIMULATE_CLOUDFLARE=1)', 403)
+    for attempt in range(retries):
+        try:
+            status, headers, body = session.get(url)
+        except PokerNowBlocked:
             if attempt < retries - 1:
                 time.sleep(1)
                 continue
-            raise Exception(f'Request failed: {e}')
+            raise
+        if _is_cloudflare_challenge(status, headers, body):
+            raise PokerNowBlocked('cloudflare', f'PokerNow (Cloudflare) blocked the request (HTTP {status})', status)
+        if status == 429:
+            if attempt < retries - 1:
+                wait = 2 ** (attempt + 1)
+                print(f'  Rate limited (429). Waiting {wait}s...')
+                time.sleep(wait)
+                continue
+            raise PokerNowBlocked('rate_limited', 'PokerNow rate limit (429) — wait a minute and try again', 429)
+        if status != 200:
+            raise PokerNowBlocked('http', f'HTTP {status} from PokerNow', status)
+        try:
+            return json.loads(body)
+        except json.JSONDecodeError:
+            raise PokerNowBlocked('bad_json', 'PokerNow returned non-JSON (probably a block page)', status)
+    raise PokerNowBlocked('rate_limited', 'All retries exhausted', 429)
 
-    raise Exception('All retries exhausted')
 
-
-def fetch_all_logs(game_id, money_only=False, max_pages=300):
+def fetch_all_logs(game_id, money_only=False, max_pages=300, session=None):
     """Fetch all log pages. money_only=True uses mm=true filter."""
+    session = session or PokerNowSession()
     all_logs = []
     before_at = None
     prev_before_at = None
@@ -120,7 +221,7 @@ def fetch_all_logs(game_id, money_only=False, max_pages=300):
         if params:
             url += '?' + '&'.join(params)
 
-        data = curl_fetch(url)
+        data = fetch_json(session, url)
         logs = data.get('logs', [])
         if not logs:
             break
@@ -148,13 +249,13 @@ def fetch_all_logs(game_id, money_only=False, max_pages=300):
 
 # ===== SOCKET.IO: Instant game state =====
 
-def fetch_game_state(game_id, timeout=4):
+def fetch_game_state(game_id, timeout=4, cookie_header=None):
     """Connect via Socket.IO to get current game state (player stacks) instantly."""
-    # Get session cookies
-    session = req_lib.Session()
-    session.get(f'https://www.pokernow.com/games/{game_id}', timeout=10)
-    cookies = session.cookies.get_dict()
-    cookie_header = '; '.join(f'{k}={v}' for k, v in cookies.items())
+    if cookie_header is None:
+        # Get session cookies from the game page
+        session = PokerNowSession()
+        session.get(GAME_URL.format(game_id=game_id), timeout=10)
+        cookie_header = session.cookie_header()
 
     result = {'state': None, 'error': None}
     event = threading.Event()
@@ -319,8 +420,12 @@ def compute_ledger(logs, active_stacks):
         results[idx]['cashout'] = round(results[idx]['cashout'] - total_net, 2)
 
     results.sort(key=lambda x: x['net'], reverse=True)
+    return {'players': results, 'settlements': compute_settlements(results)}
 
-    # Settlements
+
+def compute_settlements(results):
+    """Greedy debtor/creditor matching over [{'name', 'net', ...}] -> [{'from', 'to', 'amount'}].
+    Largest debtor pays largest creditor first, minimizing the number of transfers."""
     debtors = [{'name': p['name'], 'r': round(abs(p['net']), 2)} for p in results if p['net'] < -0.005]
     creditors = [{'name': p['name'], 'r': round(p['net'], 2)} for p in results if p['net'] > 0.005]
     debtors.sort(key=lambda x: x['r'], reverse=True)
@@ -343,7 +448,138 @@ def compute_ledger(logs, active_stacks):
         if creditors[j]['r'] < 0.01:
             j += 1
 
-    return {'players': results, 'settlements': settlements}
+    return settlements
+
+
+# ===== LEDGER FROM players_sessions (primary source) =====
+
+def fetch_players_sessions(game_id, session):
+    """PokerNow's own ledger endpoint: one request, no pagination, no Socket.IO.
+    Shape: {"buyInTotal", "buyOutTotal", "inGameTotal", "nitEscrowTotal", "gameHasRake",
+            "playersInfos": {pid: {"names": [...], "id", "buyInSum", "buyOutSum", "inGame", "nitEscrow", "net"}}}"""
+    return fetch_json(session, LEDGER_URL.format(game_id=game_id))
+
+
+def _f(v):
+    try:
+        return float(v or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def ledger_from_players_sessions(data):
+    """Convert a players_sessions payload into the ledger shape the frontend renders.
+    Amounts are used as-is — the same units PokerNow's Ledger view shows. There is no
+    zero-sum correction: mid-hand, chips in the pot legitimately make nets sum to nonzero."""
+    infos = data.get('playersInfos') if isinstance(data, dict) else None
+    if not isinstance(infos, dict):
+        raise ValueError('Not a players_sessions payload (missing "playersInfos")')
+
+    results = []
+    for pid, info in infos.items():
+        if not isinstance(info, dict):
+            continue
+        names = [n for n in (info.get('names') or []) if n]
+        name = names[-1] if names else str(pid)  # last entry = most recent nickname
+        buyin = round(_f(info.get('buyInSum')), 2)
+        cashout = round(_f(info.get('buyOutSum')) + _f(info.get('inGame')) + _f(info.get('nitEscrow')), 2)
+        if buyin == 0 and cashout == 0:
+            continue
+        results.append({
+            'name': name, 'id': info.get('id') or pid,
+            'buyin': buyin, 'cashout': cashout, 'net': round(cashout - buyin, 2),
+        })
+
+    results.sort(key=lambda x: x['net'], reverse=True)
+    return {
+        'players': results,
+        'settlements': compute_settlements(results),
+        'totals': {
+            'buyIn': data.get('buyInTotal'),
+            'buyOut': data.get('buyOutTotal'),
+            'inGame': data.get('inGameTotal'),
+        },
+    }
+
+
+# ===== MANUAL LEDGER IMPORT (pasted players_sessions JSON or downloaded ledger CSV) =====
+
+_CSV_COLS = {
+    'name':   ('player_nickname', 'nickname', 'player_name', 'player', 'name'),
+    'id':     ('player_id', 'id'),
+    'buyin':  ('buy_in', 'buyin', 'buy_ins', 'buyins'),
+    'buyout': ('buy_out', 'buyout', 'buy_outs', 'cash_out', 'cashout'),
+    'stack':  ('stack', 'in_game', 'ingame', 'current_stack'),
+    'net':    ('net', 'profit', 'net_profit'),
+}
+
+
+def _norm_header(h):
+    return re.sub(r'[^a-z0-9]+', '_', (h or '').strip().lstrip('\ufeff').lower()).strip('_')
+
+
+def _num(s):
+    s = str(s if s is not None else '').strip().replace('$', '').replace(',', '')
+    if not s or s in ('-', 'null', 'None'):
+        return 0.0
+    return float(s)
+
+
+def parse_ledger_csv(text):
+    """Parse PokerNow's "Download Ledger" CSV (one row per player session) into the ledger shape.
+    Header-driven and tolerant of column order/extra columns; sessions are summed per player."""
+    reader = csv.DictReader(io.StringIO(text.lstrip('\ufeff')))
+    headers = {_norm_header(h): h for h in (reader.fieldnames or [])}
+    col = {key: next((headers[c] for c in cands if c in headers), None) for key, cands in _CSV_COLS.items()}
+    if not col['name'] or not (col['buyin'] or col['net']):
+        raise ValueError('CSV is missing player / buy_in columns — expected PokerNow\'s "Download Ledger" CSV')
+
+    agg = {}
+    for row in reader:
+        name = (row.get(col['name']) or '').strip()
+        pid = (row.get(col['id']) or '').strip() if col['id'] else ''
+        key = pid or name
+        if not key:
+            continue
+        p = agg.setdefault(key, {'name': name or key, 'id': key, 'buyin': 0.0, 'buyout': 0.0, 'stack': 0.0, 'net': 0.0})
+        if name:
+            p['name'] = name
+        for k in ('buyin', 'buyout', 'stack', 'net'):
+            if col[k]:
+                p[k] += _num(row.get(col[k]))
+
+    results = []
+    for p in agg.values():
+        buyin = round(p['buyin'], 2)
+        if col['buyout'] or col['stack']:
+            cashout = round(p['buyout'] + p['stack'], 2)
+        else:
+            cashout = round(buyin + p['net'], 2)  # net-only export
+        if buyin == 0 and cashout == 0:
+            continue
+        results.append({'name': p['name'], 'id': p['id'], 'buyin': buyin, 'cashout': cashout,
+                        'net': round(cashout - buyin, 2)})
+    if not results:
+        raise ValueError('No player rows found in the ledger CSV')
+
+    results.sort(key=lambda x: x['net'], reverse=True)
+    return {'players': results, 'settlements': compute_settlements(results)}
+
+
+def parse_ledger_import(text):
+    """Auto-detect a pasted players_sessions JSON or a ledger CSV. Returns (ledger, fmt)."""
+    s = (text or '').strip().lstrip('\ufeff')
+    if not s:
+        raise ValueError('Nothing to import')
+    if s.startswith('{'):
+        try:
+            data = json.loads(s)
+        except json.JSONDecodeError as e:
+            raise ValueError(f'Invalid JSON: {e}')
+        return ledger_from_players_sessions(data), 'json'
+    if ',' in s.splitlines()[0]:
+        return parse_ledger_csv(s), 'csv'
+    raise ValueError('Paste the players_sessions JSON or drop the downloaded ledger CSV')
 
 
 # ===== HTTP SERVER =====
@@ -390,16 +626,47 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         m = re.match(r'^/api/ledger/([a-zA-Z0-9_-]+)$', self.path)
         if m:
             game_id = m.group(1)
-            try:
-                print(f'  Fetching ledger for {game_id} (parallel)...')
+            ledger_url = LEDGER_URL.format(game_id=game_id)
 
-                # Run Socket.IO and log fetch in parallel
+            def _fail(e, status):
+                kind = {'cloudflare': 'cloudflare_blocked', 'rate_limited': 'rate_limited'}.get(
+                    getattr(e, 'kind', None), 'fetch_failed')
+                self._json_response(status, {'error': kind, 'message': str(e),
+                                             'ledgerUrl': ledger_url, 'gameId': game_id})
+
+            session = PokerNowSession()
+
+            # 1) Primary: PokerNow's own ledger endpoint — one request, no Socket.IO
+            try:
+                print(f'  Fetching players_sessions for {game_id}...')
+                ledger = ledger_from_players_sessions(fetch_players_sessions(game_id, session))
+                ledger['source'] = 'players_sessions'
+                print(f'  Ledger: {len(ledger["players"])} players via players_sessions')
+                self._json_response(200, ledger)
+                return
+            except PokerNowBlocked as e:
+                if e.kind in ('cloudflare', 'rate_limited'):
+                    print(f'  BLOCKED: {e}')
+                    _fail(e, 503)  # more requests would just be blocked too
+                    return
+                print(f'  players_sessions failed ({e}); falling back to logs + Socket.IO')
+            except Exception as e:
+                print(f'  players_sessions unusable ({e}); falling back to logs + Socket.IO')
+
+            # 2) Legacy: money-only log crawl + Socket.IO stacks
+            try:
+                try:
+                    session.get(GAME_URL.format(game_id=game_id), timeout=10)  # cookies for Socket.IO
+                except PokerNowBlocked as e:
+                    print(f'  Game page bootstrap failed ({e})')
+                cookie_header = session.cookie_header()
+
                 stacks_result = {'stacks': {}, 'error': None}
                 logs_result = {'logs': None, 'error': None}
 
                 def _fetch_stacks():
                     try:
-                        state = fetch_game_state(game_id)
+                        state = fetch_game_state(game_id, cookie_header=cookie_header)
                         stacks_result['stacks'] = extract_stacks_from_state(state)
                         print(f'  Got stacks for {len(stacks_result["stacks"])} active players via Socket.IO')
                     except Exception as e:
@@ -408,9 +675,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
                 def _fetch_logs():
                     try:
-                        logs_result['logs'] = fetch_all_logs(game_id, money_only=True)
+                        logs_result['logs'] = fetch_all_logs(game_id, money_only=True, session=session)
                     except Exception as e:
-                        logs_result['error'] = str(e)
+                        logs_result['error'] = e
 
                 t1 = threading.Thread(target=_fetch_stacks)
                 t2 = threading.Thread(target=_fetch_logs)
@@ -420,13 +687,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 t2.join()
 
                 if logs_result['error']:
-                    raise Exception(logs_result['error'])
+                    raise logs_result['error']
 
                 ledger = compute_ledger(logs_result['logs'], stacks_result['stacks'])
+                ledger['source'] = 'logs'
                 self._json_response(200, ledger)
+            except PokerNowBlocked as e:
+                print(f'  ERROR: {e}')
+                _fail(e, 503 if e.kind in ('cloudflare', 'rate_limited') else 502)
             except Exception as e:
                 print(f'  ERROR: {e}')
-                self._json_response(502, {'error': str(e)})
+                _fail(e, 502)
             return
 
         # GET /api/stats/{gameId} — live game stats via Plus API
@@ -452,6 +723,24 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self):
+        # POST /api/ledger/import — pasted players_sessions JSON or downloaded ledger CSV.
+        # The user's browser can reach PokerNow when our server is Cloudflare-blocked.
+        if self.path == '/api/ledger/import':
+            try:
+                length = int(self.headers.get('Content-Length', 0))
+                if length > 5 * 1024 * 1024:
+                    self._json_response(400, {'error': 'parse_failed', 'message': 'Ledger file too large (max 5 MB)'})
+                    return
+                body = self.rfile.read(length).decode('utf-8', errors='replace')
+                ledger, fmt = parse_ledger_import(body)
+                ledger['source'] = f'import_{fmt}'
+                print(f'  Imported ledger ({fmt}): {len(ledger["players"])} players')
+                self._json_response(200, ledger)
+            except Exception as e:
+                print(f'  ERROR importing ledger: {e}')
+                self._json_response(400, {'error': 'parse_failed', 'message': str(e)})
+            return
+
         # POST /api/stats/upload or /api/stats/csv — upload CSV or JSON for stats
         if self.path in ('/api/stats/upload', '/api/stats/csv'):
             try:
